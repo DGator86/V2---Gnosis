@@ -1,0 +1,31 @@
+# Agentic Trading System - Dependencies
+# Install: pip install -r requirements.txt
+
+# Web Framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+
+# Data Models & Validation
+pydantic>=2.0.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0
+
+# Database & Storage
+duckdb>=0.8.0
+
+# Date/Time Utilities
+python-dateutil>=2.8.0
+
+# Market Data APIs
+alpaca-py>=0.9.0        # Alpaca Markets official SDK
+yfinance>=0.2.30        # Yahoo Finance fallback
+python-dotenv>=1.0.0    # Environment variable management
+requests>=2.31.0        # HTTP client
+
+# Optional: Development Tools
+# pytest>=7.4.0
+# black>=23.0.0
+# ruff>=0.0.285

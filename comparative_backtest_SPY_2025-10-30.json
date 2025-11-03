@@ -1,0 +1,68 @@
+[
+  {
+    "name": "3-Agent Baseline",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  },
+  {
+    "name": "3-Agent Conservative",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  },
+  {
+    "name": "4-Agent + Wyckoff",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  },
+  {
+    "name": "4-Agent + Markov",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  },
+  {
+    "name": "5-Agent Full",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  },
+  {
+    "name": "5-Agent Strict",
+    "pnl": 0.0,
+    "num_trades": 0,
+    "win_rate": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "sharpe": 0.0,
+    "max_dd": 0.0,
+    "rank": 3.5
+  }
+]
