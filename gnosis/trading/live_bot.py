@@ -41,9 +41,12 @@ load_dotenv()
 # Import our components
 from gnosis.trading.position_manager import PositionManager, Position
 from gnosis.trading.risk_manager import RiskManager
+from gnosis.regime import RegimeDetector, RegimeState
 from gnosis.engines.hedge_v0 import compute_hedge_v0
 from gnosis.engines.liquidity_v0 import compute_liquidity_v0
 from gnosis.engines.sentiment_v0 import compute_sentiment_v0
+from gnosis.engines.wyckoff_v0 import compute_wyckoff_v0
+from gnosis.engines.markov_regime_v0 import compute_markov_regime_v0, SimpleHMM
 
 # Try to import memory (optional)
 try:
@@ -55,6 +58,17 @@ try:
     MEMORY_AVAILABLE = True
 except ImportError:
     MEMORY_AVAILABLE = False
+    # Fallback AgentView dataclass if memory not available
+    from dataclasses import dataclass
+    from typing import Any
+    
+    @dataclass
+    class AgentView:
+        agent_name: str
+        signal: int
+        confidence: float
+        reasoning: str
+        features: dict
 
 
 class LiveTradingBot:
@@ -102,6 +116,8 @@ class LiveTradingBot:
             max_daily_loss=-0.05
         )
         self.risk_mgr = RiskManager(capital=30000.0)
+        self.regime_detector = RegimeDetector()
+        self.markov_hmm = SimpleHMM()  # Stateful HMM for markov agent
         
         # Data buffers
         self.bars: list = []  # Recent bars for feature computation
@@ -215,8 +231,20 @@ class LiveTradingBot:
             return None
     
     def evaluate_agents(self, features: Dict, price: float) -> list:
-        """Evaluate all agents"""
+        """
+        Evaluate agents (conditionally based on regime)
+        
+        Base agents (always active): hedge, liquidity, sentiment
+        Conditional agents: wyckoff (trends), markov (clear regimes)
+        """
         agent_views = []
+        
+        # Detect regime first
+        df = pd.DataFrame(self.bars)
+        regime = self.regime_detector.detect(df)
+        
+        print(f"📊 Regime: {regime.primary} (conf={regime.confidence:.2f}, "
+              f"trend={regime.trend_strength:+.2f})")
         
         # Simplified agent evaluation (you'd use actual agent classes)
         # For now, using dummy logic
@@ -257,6 +285,61 @@ class LiveTradingBot:
             "Dummy sentiment logic", {"momentum": features.get("sent_momentum", 0)}
         ))
         
+        # Conditional: Wyckoff agent (active in trends)
+        if self.regime_detector.should_use_wyckoff(regime):
+            wyckoff_result = compute_wyckoff_v0(self.symbol, df["t_event"].iloc[-1], df)
+            wyckoff_signal = 0
+            wyckoff_conf = wyckoff_result["confidence"]
+            
+            # Signal logic based on phase
+            if wyckoff_result["phase"] == "accumulation" and wyckoff_result["spring_detected"]:
+                wyckoff_signal = 1
+                wyckoff_conf = min(0.8, wyckoff_conf + 0.2)
+            elif wyckoff_result["phase"] == "distribution" and wyckoff_result["upthrust_detected"]:
+                wyckoff_signal = -1
+                wyckoff_conf = min(0.8, wyckoff_conf + 0.2)
+            elif wyckoff_result["phase"] == "markup":
+                wyckoff_signal = 1
+            elif wyckoff_result["phase"] == "markdown":
+                wyckoff_signal = -1
+            
+            agent_views.append(AgentView(
+                "wyckoff", wyckoff_signal, wyckoff_conf,
+                f"Phase: {wyckoff_result['phase']}", {"phase": wyckoff_result["phase"]}
+            ))
+            print(f"   ✅ Wyckoff active: {wyckoff_result['phase']}")
+        else:
+            print(f"   ⏸️  Wyckoff inactive (regime: {regime.primary})")
+        
+        # Conditional: Markov agent (active in clear regimes)
+        if self.regime_detector.should_use_markov(regime):
+            markov_result = compute_markov_regime_v0(
+                self.symbol, df["t_event"].iloc[-1], df, hmm=self.markov_hmm
+            )
+            markov_signal = 0
+            markov_conf = markov_result["confidence"]
+            
+            # Signal logic based on state
+            state = markov_result["current_state"]
+            if state == "trending_up":
+                markov_signal = 1
+            elif state == "trending_down":
+                markov_signal = -1
+            elif state == "accumulation":
+                markov_signal = 1
+                markov_conf *= 0.8  # Lower confidence for accumulation
+            elif state == "distribution":
+                markov_signal = -1
+                markov_conf *= 0.8
+            
+            agent_views.append(AgentView(
+                "markov", markov_signal, markov_conf,
+                f"State: {state}", {"state": state}
+            ))
+            print(f"   ✅ Markov active: {state}")
+        else:
+            print(f"   ⏸️  Markov inactive (regime: {regime.primary})")
+        
         return agent_views
     
     def make_decision(
@@ -269,15 +352,16 @@ class LiveTradingBot:
         """
         Make trading decision using agents + memory
         """
-        # Base consensus (2-of-3)
+        # Dynamic consensus (2 votes minimum, scales with agent count)
         signals = [av.signal for av in agent_views]
         votes = {-1: signals.count(-1), 0: signals.count(0), 1: signals.count(1)}
         
         # Find majority
         base_decision = max(votes.items(), key=lambda x: x[1])[0]
         
-        # Require at least 2 votes
-        if votes[base_decision] < 2:
+        # Require at least 2 votes (works for 3-5 agents)
+        min_votes = max(2, len(agent_views) // 2)
+        if votes[base_decision] < min_votes:
             base_decision = 0
         
         # Average confidence
