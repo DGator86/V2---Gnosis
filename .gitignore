@@ -1,2 +1,38 @@
+# Environment variables
 .env
 *.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Data files
+data/
+data_l0/
+data_l1/
+data_l3/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Test outputs
+*_backtest_*.json
+test_results/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
