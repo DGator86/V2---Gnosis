@@ -5,6 +5,7 @@ Computes GEX, Vanna, Charm, gamma-flip level, and normalized pressure score.
 
 import numpy as np
 from typing import List
+from datetime import datetime
 from ..schemas.bars import Bar
 from ..schemas.options import OptionSnapshot
 from ..schemas.features import HedgeFields
@@ -34,7 +35,7 @@ def compute_hedge_fields(
         Computed hedge pressure fields
     """
     if not options or not bars:
-        ts = bars[-1].ts if bars else options[0].ts if options else None
+        ts = bars[-1].ts if bars else (options[0].ts if options else datetime.now())
         return HedgeFields(
             ts=ts,
             symbol=symbol,

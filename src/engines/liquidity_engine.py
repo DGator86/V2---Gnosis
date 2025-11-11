@@ -6,6 +6,7 @@ Computes Amihud illiquidity, Kyle's λ, VPOC, zones, dark pool ratio, and liquid
 import numpy as np
 import pandas as pd
 from typing import List, Optional
+from datetime import datetime
 from ..schemas.bars import Bar
 from ..schemas.features import LiquidityFields
 
@@ -34,7 +35,7 @@ def compute_liquidity_fields(
     """
     if not bars or len(bars) < 2:
         return LiquidityFields(
-            ts=bars[0].ts if bars else None,
+            ts=bars[0].ts if bars else datetime.now(),
             symbol=symbol,
             amihud=0.0,
             kyle_lambda=0.0,

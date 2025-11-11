@@ -5,6 +5,7 @@ Fuses news sentiment, technical regime signals, and Wyckoff phase classification
 
 import numpy as np
 from typing import List, Optional
+from datetime import datetime
 from ..schemas.bars import Bar
 from ..schemas.features import SentimentFields
 
@@ -33,7 +34,7 @@ def compute_sentiment_fields(
     """
     if not bars or len(bars) < 2:
         return SentimentFields(
-            ts=bars[0].ts if bars else None,
+            ts=bars[0].ts if bars else datetime.now(),
             symbol=symbol,
             news_sentiment=0.0,
             social_sentiment=None,
