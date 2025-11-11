@@ -1,0 +1,70 @@
+# Gnosis Trading Framework Configuration
+
+symbols:
+  - SPY
+  - QQQ
+
+bar_timeframes:
+  - 1m
+  - 5m
+  - 1h
+  - 1d
+
+feature_store_path: data/feature_store.duckdb
+
+risk:
+  max_risk_per_trade: 0.01   # 1% equity per trade
+  max_open_trades: 5
+  max_position_pct: 0.2      # 20% max per position
+  kelly_fraction: 0.25       # quarter Kelly
+
+engines:
+  hedge:
+    min_oi_threshold: 50
+    normalize_window: 20
+    
+  liquidity:
+    profile_lookback: 60
+    kyle_window: 120
+    amihud_span: 20
+    
+  sentiment:
+    regime_windows:
+      - 20
+      - 60
+    wyckoff_enable: true
+    volatility_threshold_calm: 0.15
+    volatility_threshold_normal: 0.30
+    volatility_threshold_elevated: 0.50
+
+agents:
+  composer:
+    weights:
+      hedge: 0.45
+      liquidity: 0.35
+      sentiment: 0.20
+    
+    gamma_regime_weights:
+      hedge: 0.55
+      liquidity: 0.25
+      sentiment: 0.20
+    
+    calm_regime_weights:
+      hedge: 0.35
+      liquidity: 0.35
+      sentiment: 0.30
+
+trade:
+  default_horizon_hours: 24.0
+  atr_period: 14
+  stop_loss_atr_multiplier: 1.0
+  target_atr_multiplier: 2.0
+
+backtest:
+  initial_equity: 100000.0
+  slippage_bps: 5  # 5 basis points
+  commission_per_trade: 1.0
+
+logging:
+  level: INFO
+  log_file: logs/gnosis.log

@@ -3,6 +3,10 @@ numpy>=1.24.0
 pandas>=2.0.0
 scipy>=1.10.0
 
+# Schema and validation
+pydantic>=2.0.0
+pyyaml>=6.0.0
+
 # Configuration
 python-dotenv>=1.0.0
 
