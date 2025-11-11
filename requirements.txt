@@ -1,0 +1,14 @@
+# Core Dependencies
+pydantic>=2.6.0
+transformers>=4.44.0
+torch>=2.1.0
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+beautifulsoup4>=4.12.0
+requests>=2.32.0
+feedparser>=6.0.11
+aiohttp>=3.9.0
+python-dateutil>=2.8.2
+rich>=13.7.0  # For better CLI output
+pytz>=2024.1
