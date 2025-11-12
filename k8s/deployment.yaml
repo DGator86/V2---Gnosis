@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gnosis-sentiment-engine
+  namespace: trading
+  labels:
+    app: gnosis
+    component: sentiment-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gnosis
+      component: sentiment-engine
+  template:
+    metadata:
+      labels:
+        app: gnosis
+        component: sentiment-engine
+    spec:
+      containers:
+      - name: sentiment-engine
+        image: gnosis/sentiment-engine:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ENABLE_CACHING
+          value: "true"
+        - name: MAX_WORKERS
+          value: "4"
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: gnosis-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: gnosis-data-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: gnosis-logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gnosis-sentiment-service
+  namespace: trading
+  labels:
+    app: gnosis
+    component: sentiment-engine
+spec:
+  selector:
+    app: gnosis
+    component: sentiment-engine
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnosis-config
+  namespace: trading
+data:
+  features.yaml: |
+    # Feature configuration
+    phase1:
+      vsa:
+        enabled: true
+        window: 50
+      hawkes:
+        enabled: true
+        threshold_percentile: 90.0
+    
+    phase2:
+      microstructure:
+        enabled: true
+      permutation_entropy:
+        enabled: true
+    
+    phase3:
+      fractal_dimension:
+        enabled: true
+      icss_changepoints:
+        enabled: true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gnosis-data-pvc
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gnosis-logs-pvc
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gnosis-sentiment-hpa
+  namespace: trading
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gnosis-sentiment-engine
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
