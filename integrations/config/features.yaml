@@ -1,0 +1,139 @@
+# Feature Configuration for Gnosis Trading System
+# Toggle features on/off and configure parameters
+
+version: "1.0.0"
+
+# Phase 1: Core Features (High Priority)
+phase1:
+  vsa:
+    enabled: true
+    window: 50
+    climax_vol_threshold: 2.0
+    climax_spread_threshold: 1.5
+    description: "Volume Spread Analysis - Supply/demand imbalances"
+  
+  hawkes:
+    enabled: true
+    threshold_percentile: 90.0
+    max_iter: 500
+    branching_threshold: 0.8
+    description: "Hawkes Process - Volatility clustering detection"
+  
+  meta_labeling:
+    enabled: true
+    n_estimators: 100
+    max_depth: 5
+    min_samples_leaf: 50
+    threshold: 0.5
+    description: "Meta-Labeling - Confidence scoring for signals"
+  
+  mcpt:
+    enabled: true
+    n_permutations: 1000
+    alpha: 0.05
+    bonferroni_correction: true
+    description: "Monte Carlo Permutation Tests - Statistical validation"
+
+# Phase 2: Advanced Features (Medium Priority)
+phase2:
+  microstructure:
+    enabled: true
+    tick_rule: "tick"
+    window: 20
+    description: "Microstructure - Order flow imbalance"
+  
+  visibility_graph:
+    enabled: false  # Computationally intensive
+    window: 50
+    variant: "natural"
+    description: "Visibility Graph - Time series network topology"
+  
+  permutation_entropy:
+    enabled: true
+    order: 3
+    delay: 1
+    window: 50
+    description: "Permutation Entropy - Complexity analysis"
+  
+  event_discretization:
+    enabled: true
+    method: "volume"
+    threshold: null  # Auto-detect
+    description: "Event Discretization - Microstructure events"
+
+# Phase 3: Research Features (Lower Priority)
+phase3:
+  fractal_dimension:
+    enabled: true
+    window: 100
+    max_lag: 20
+    method: "rs"  # or "dfa"
+    description: "Fractal Dimension - Hurst exponent for trend detection"
+  
+  icss_changepoints:
+    enabled: true
+    alpha: 0.05
+    min_regime_length: 20
+    description: "ICSS - Variance regime changepoint detection"
+  
+  kpca:
+    enabled: false  # Use for dimensionality reduction if needed
+    n_components: 5
+    kernel: "rbf"
+    gamma: null  # Auto
+    description: "Kernel PCA - Non-linear dimensionality reduction"
+  
+  burst_detection:
+    enabled: true
+    window: 20
+    threshold: 2.5
+    min_duration: 2
+    description: "Burst Detection - Activity spike identification"
+  
+  msm:
+    enabled: false  # Not yet implemented
+    description: "Markov Switching Multifractal - Volatility regimes"
+
+# Validation Settings
+validation:
+  run_independence_check: true
+  correlation_threshold: 0.85
+  vif_threshold: 10.0
+  
+  run_reversibility_check: true
+  max_lag: 5
+  causality_alpha: 0.05
+  
+  run_mcpt_on_features: true
+  feature_significance_threshold: 0.05
+
+# Integration Settings
+integration:
+  sentiment_engine:
+    include_vsa_signals: true
+    include_hawkes_intensity: true
+    include_meta_confidence: true
+    include_permutation_entropy: true
+    include_hurst_exponent: true
+  
+  market_structure_engine:
+    include_microstructure: true
+    include_changepoints: true
+    include_burst_detection: true
+  
+  pattern_engine:
+    include_visibility_graph: false  # Too slow for real-time
+    include_event_discretization: true
+
+# Performance Settings
+performance:
+  parallel_processing: true
+  n_jobs: -1  # Use all cores
+  cache_intermediate: true
+  cache_ttl_seconds: 300
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_feature_computation_time: true
+  log_validation_results: true
