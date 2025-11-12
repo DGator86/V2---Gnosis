@@ -1,0 +1,128 @@
+# DHPE Pipeline Configuration
+
+runtime:
+  log_level: "INFO"
+  checkpoints_dir: "logs/checkpoints"
+  enable_checkpointing: true
+  max_checkpoint_age_hours: 24
+
+engines:
+  hedge:
+    polars_threads: 4
+    features:
+      - gamma_pressure
+      - vanna_pressure
+      - charm_pressure
+      - vega_notional
+      - delta_imbalance
+    
+  volume:
+    window_bars: 20
+    features:
+      - flow_volume
+      - vwap
+      - trade_imbalance
+      - liquidity_score
+      - support_resistance_levels
+    
+  sentiment:
+    sources:
+      - news
+      - social
+      - filings
+    decay_half_life_days: 7.0
+    min_confidence: 0.3
+    max_memory_items: 5000
+
+lookahead:
+  horizons: [1, 5, 20, 60]  # bars or minutes
+  scenarios:
+    - base
+    - vol_up
+    - vol_down
+    - gamma_squeeze
+  monte_carlo_sims: 1000
+  confidence_levels: [0.5, 0.75, 0.95]
+
+tracking:
+  ledger_path: "data/ledger.jsonl"
+  enable_position_tracking: true
+  enable_result_tracking: true
+  backup_interval_minutes: 60
+
+feedback:
+  reward_metric: "sharpe"  # pnl, sharpe, hit_rate, sortino
+  learning_rate: 0.2
+  window_size: 100
+  enable_per_agent_learning: true
+  enable_regime_learning: true
+
+security:
+  enable_guardrails: true
+  enable_pii_redaction: true
+  max_tool_timeout_seconds: 30
+  allowed_tools:
+    - web_scrape
+    - data_fetch
+    - compute
+  blocked_patterns:
+    - "exec("
+    - "eval("
+    - "__import__"
+
+memory:
+  short_term_max_items: 100
+  long_term_max_items: 10000
+  vector_dim: 768
+  similarity_threshold: 0.7
+
+agents:
+  primary_hedge:
+    enabled: true
+    confidence_threshold: 0.5
+    rules:
+      - gamma_pin_detection
+      - vanna_flow_alignment
+      - charm_decay_timing
+  
+  primary_volume:
+    enabled: true
+    confidence_threshold: 0.5
+    rules:
+      - flow_surge_detection
+      - liquidity_void_detection
+      - support_resistance_bounce
+  
+  primary_sentiment:
+    enabled: true
+    confidence_threshold: 0.5
+    rules:
+      - news_catalyst_detection
+      - sentiment_reversal
+      - event_risk_assessment
+  
+  composer:
+    enabled: true
+    voting_method: "weighted_confidence"  # majority, weighted_confidence, unanimous
+    min_agreement_score: 0.6
+    strategy_mapping:
+      long: "spread:call_debit"
+      short: "spread:put_debit"
+      neutral: "iron_condor"
+      hold: "no_action"
+
+adapters:
+  tavily:
+    enabled: false
+    api_key_env: "TAVILY_API_KEY"
+  
+  paperqa2:
+    enabled: false
+  
+  openbb:
+    enabled: false
+    api_key_env: "OPENBB_API_KEY"
+  
+  mlflow:
+    enabled: false
+    tracking_uri: "http://localhost:5000"
