@@ -17,8 +17,8 @@ This package contains implementations of advanced trading features:
 """
 
 from .vsa import compute_vsa, VSASignals
-from .vol_hawkes import fit_hawkes_volatility, HawkesParams
-from .meta_labels import train_meta_labels, apply_meta_labels, MetaLabelModel
+from .vol_hawkes import fit_hawkes_volatility, compute_hawkes_features, HawkesParams
+from .meta_labels import train_meta_labels, apply_meta_labels, create_meta_labels, MetaLabelModel
 from .microstructure import compute_order_flow, MicrostructureFeatures
 from .visibility_graph import compute_visibility_graph, VisibilityGraphMetrics
 from .permutation_entropy import compute_permutation_entropy, PermutationEntropyResult
@@ -34,10 +34,12 @@ __all__ = [
     "VSASignals",
     # Hawkes
     "fit_hawkes_volatility",
+    "compute_hawkes_features",
     "HawkesParams",
     # Meta-Labeling
     "train_meta_labels",
     "apply_meta_labels",
+    "create_meta_labels",
     "MetaLabelModel",
     # Microstructure
     "compute_order_flow",
