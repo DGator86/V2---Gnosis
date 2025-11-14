@@ -151,6 +151,6 @@ class VolumeEngine:
                 "latency_ms": latency_ms,
                 "support_resistance": sr_levels
             },
-            timestamp=datetime.now().timestamp(),
+            timestamp=datetime.now(),
             confidence=1.0 if len(recent_trades) > 0 else 0.0
         )

@@ -96,8 +96,8 @@ def main():
     print("🔍 Runtime Verification:")
     
     try:
-        from engines.orchestration.config_loader import get_config
-        config = get_config()
+        from config import load_config
+        load_config()
         print(f"  ✅ Config loads successfully")
     except Exception as e:
         print(f"  ❌ Config failed: {e}")

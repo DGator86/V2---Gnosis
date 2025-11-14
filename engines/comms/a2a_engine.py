@@ -40,7 +40,7 @@ class A2AEngine:
             version=self.PROTOCOL_VERSION,
             payload=payload,
             tools=tools or [],
-            timestamp=datetime.now().timestamp()
+            timestamp=datetime.now()
         )
         
         self.message_history.append(message)
@@ -59,7 +59,7 @@ class A2AEngine:
             payload={
                 "type": "hedge",
                 "features": features,
-                "timestamp": datetime.now().timestamp()
+                "timestamp": datetime.now().isoformat()
             },
             tools=tools
         )
@@ -75,7 +75,7 @@ class A2AEngine:
             payload={
                 "type": "volume",
                 "features": features,
-                "timestamp": datetime.now().timestamp()
+                "timestamp": datetime.now().isoformat()
             },
             tools=tools
         )
@@ -91,7 +91,7 @@ class A2AEngine:
             payload={
                 "type": "sentiment",
                 "features": features,
-                "timestamp": datetime.now().timestamp()
+                "timestamp": datetime.now().isoformat()
             },
             tools=tools
         )

@@ -34,7 +34,7 @@ class SentimentEngine:
         return MemoryItem(
             content=item.get("title", ""),
             embedding=None,  # TODO: Add embedding generation
-            timestamp=item.get("timestamp", datetime.now().timestamp()),
+            timestamp=item.get("timestamp", datetime.now()),
             confidence=item.get("confidence", 0.5),
             metadata={
                 "source": item.get("source", "unknown"),
@@ -56,8 +56,8 @@ class SentimentEngine:
         total_weight = 0.0
         weighted_sentiment = 0.0
         
-        now = datetime.now().timestamp()
-        
+        now = datetime.now()
+
         for item in items:
             weight = self.memory._decay_weight(item, now)
             sentiment = item.metadata.get("sentiment_score", 0.0)
@@ -159,6 +159,6 @@ class SentimentEngine:
                 "memory_stats": memory_stats,
                 "latency_ms": latency_ms
             },
-            timestamp=datetime.now().timestamp(),
+            timestamp=datetime.now(),
             confidence=sentiment_features["sentiment_consistency"]
         )

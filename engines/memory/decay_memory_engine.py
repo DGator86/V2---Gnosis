@@ -36,18 +36,22 @@ class DecayMemoryEngine:
         logger.info(f"Decay memory engine initialized: half_life={half_life_days}d, "
                    f"max_items={max_items}, min_conf={min_confidence}")
     
-    def _decay_weight(self, item: MemoryItem, now: Optional[float] = None) -> float:
+    def _decay_weight(self, item: MemoryItem, now: Optional[datetime] = None) -> float:
         """
         Calculate decay weight using exponential decay formula
         weight = confidence * 2^(-age / half_life)
         """
         if now is None:
-            now = datetime.now().timestamp()
-        
-        age_days = item.age_days(now)
+            now_dt = datetime.now()
+        elif isinstance(now, datetime):
+            now_dt = now
+        else:  # pragma: no cover - defensive fallback
+            now_dt = datetime.fromtimestamp(float(now))
+
+        age_days = item.age_days(now_dt)
         decay_factor = math.pow(2, -age_days / self.half_life_days)
         weight = item.confidence * decay_factor
-        
+
         return weight
     
     def add(self, item: MemoryItem):
@@ -65,8 +69,8 @@ class DecayMemoryEngine:
     
     def _prune(self):
         """Remove lowest-weighted items to stay under max_items"""
-        now = datetime.now().timestamp()
-        
+        now = datetime.now()
+
         # Calculate weights for all items
         weighted_items = [(self._decay_weight(item, now), item) for item in self.items]
         
@@ -80,14 +84,14 @@ class DecayMemoryEngine:
         if removed > 0:
             logger.debug(f"Pruned {removed} low-weight items")
     
-    def topk(self, k: int = 10, now: Optional[float] = None) -> List[MemoryItem]:
+    def topk(self, k: int = 10, now: Optional[datetime] = None) -> List[MemoryItem]:
         """Get top-k items by current weight"""
         if now is None:
-            now = datetime.now().timestamp()
-        
+            now = datetime.now()
+
         weighted_items = [(self._decay_weight(item, now), item) for item in self.items]
         weighted_items.sort(key=lambda x: x[0], reverse=True)
-        
+
         return [item for _, item in weighted_items[:k]]
     
     def query(self, 
@@ -104,9 +108,9 @@ class DecayMemoryEngine:
             metadata_filter: Dict of metadata key-value pairs to match
             limit: Maximum results to return
         """
-        now = datetime.now().timestamp()
+        now = datetime.now()
         results = []
-        
+
         for item in self.items:
             weight = self._decay_weight(item, now)
             
@@ -146,7 +150,7 @@ class DecayMemoryEngine:
                 "avg_confidence": 0.0
             }
         
-        now = datetime.now().timestamp()
+        now = datetime.now()
         weights = [self._decay_weight(item, now) for item in self.items]
         ages = [item.age_days(now) for item in self.items]
         confidences = [item.confidence for item in self.items]
@@ -162,11 +166,11 @@ class DecayMemoryEngine:
     
     def clear_old(self, max_age_days: float):
         """Remove items older than max_age_days"""
-        now = datetime.now().timestamp()
+        now = datetime.now()
         original_count = len(self.items)
-        
+
         self.items = [
-            item for item in self.items 
+            item for item in self.items
             if item.age_days(now) <= max_age_days
         ]
         

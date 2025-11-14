@@ -128,7 +128,7 @@ class DemoInputsEngine:
             })
         
         return {
-            "timestamp": datetime.now().timestamp(),
+            "timestamp": datetime.now().isoformat(),
             "bids": bids,
             "asks": asks,
             "spread": spread,
@@ -141,10 +141,10 @@ class DemoInputsEngine:
         This is the main entry point
         """
         logger.info(f"Generating demo inputs for {symbol}")
-        
+
         return RawInputs(
             symbol=symbol,
-            timestamp=datetime.now().timestamp(),
+            timestamp=datetime.now(),
             options=self.get_options_chain(symbol),
             trades=self.get_trade_tape(symbol),
             news=self.get_news_feed(symbol),

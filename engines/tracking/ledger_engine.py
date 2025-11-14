@@ -5,7 +5,7 @@ Implements JSONL-based audit trail
 """
 from typing import Dict, Any, List, Optional
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from schemas import Suggestion, Position, Result
 from ..orchestration.logger import get_logger
 
@@ -36,7 +36,7 @@ class LedgerEngine:
         with open(self.ledger_path, 'a') as f:
             entry = {
                 "type": entry_type,
-                "timestamp": datetime.now().timestamp(),
+                "timestamp": datetime.now().isoformat(),
                 "data": data
             }
             f.write(json.dumps(entry) + '\n')
@@ -44,21 +44,21 @@ class LedgerEngine:
     def log_suggestion(self, suggestion: Suggestion):
         """Log a suggestion"""
         self.suggestions[suggestion.id] = suggestion
-        self._write_entry("SUGGESTION", suggestion.to_dict())
+        self._write_entry("SUGGESTION", suggestion.model_dump(mode="json"))
         
         logger.info(f"Logged suggestion: {suggestion.id} | {suggestion.layer} | {suggestion.action}")
     
     def log_position(self, position: Position):
         """Log an opened position"""
         self.positions[position.id] = position
-        self._write_entry("POSITION", position.to_dict())
+        self._write_entry("POSITION", position.model_dump(mode="json"))
         
         logger.info(f"Logged position: {position.id} | {position.side} | size={position.size}")
     
     def log_result(self, result: Result):
         """Log a closed position result"""
         self.results[result.id] = result
-        self._write_entry("RESULT", result.to_dict())
+        self._write_entry("RESULT", result.model_dump(mode="json"))
         
         logger.info(f"Logged result: {result.id} | pnl={result.pnl:.2f} | pnl_pct={result.pnl_pct:.2%}")
     
@@ -101,7 +101,7 @@ class LedgerEngine:
         
         # Apply filters
         if lookback_hours:
-            cutoff = datetime.now().timestamp() - (lookback_hours * 3600)
+            cutoff = datetime.now() - timedelta(hours=lookback_hours)
             filtered_results = [r for r in filtered_results if r.exit_time >= cutoff]
         
         if symbol:

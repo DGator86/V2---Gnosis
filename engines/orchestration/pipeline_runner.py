@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 
+from config import AppConfig, load_config
 from schemas import RawInputs, StandardSnapshot, Suggestion, Position, Result
 from engines.inputs.demo_inputs_engine import DemoInputsEngine
 from engines.hedge_engine import HedgeEngine
@@ -18,7 +19,6 @@ from engines.lookahead.lookahead_engine import LookaheadEngine
 from engines.tracking.ledger_engine import LedgerEngine
 from engines.feedback.feedback_engine import FeedbackEngine
 from engines.orchestration.checkpoint_engine import CheckpointEngine
-from engines.orchestration.config_loader import get_config
 from engines.orchestration.logger import LoggerEngine
 
 from agents.primary_hedge.agent import PrimaryHedgeAgent
@@ -35,10 +35,10 @@ class PipelineRunner:
     
     def __init__(self, config_path: Optional[str] = None):
         # Load config
-        self.config = get_config(config_path)
-        
+        self.config: AppConfig = load_config(config_path)
+
         # Setup logging
-        log_level = self.config.get("runtime.log_level", "INFO")
+        log_level = self.config.runtime.log_level
         self.loggers = LoggerEngine.setup_pipeline_logging(log_level)
         self.logger = self.loggers['orchestration']
         
@@ -47,32 +47,34 @@ class PipelineRunner:
         self.inputs_engine = DemoInputsEngine()
         self.hedge_engine = HedgeEngine()
         self.volume_engine = VolumeEngine(
-            window_bars=self.config.get("engines.volume.window_bars", 20)
+            window_bars=self.config.engines.volume.window_bars
         )
         self.sentiment_engine = SentimentEngine(
-            decay_half_life_days=self.config.get("engines.sentiment.decay_half_life_days", 7.0),
-            max_memory_items=self.config.get("engines.sentiment.max_memory_items", 5000),
-            min_confidence=self.config.get("engines.sentiment.min_confidence", 0.3)
+            decay_half_life_days=self.config.engines.sentiment.decay_half_life_days,
+            max_memory_items=self.config.engines.sentiment.max_memory_items,
+            min_confidence=self.config.engines.sentiment.min_confidence
         )
         self.standardizer = StandardizerEngine()
         self.lookahead_engine = LookaheadEngine(
-            horizons=self.config.get("lookahead.horizons", [1, 5, 20, 60]),
-            scenarios=self.config.get("lookahead.scenarios", ["base", "vol_up", "vol_down"])
+            horizons=self.config.lookahead.horizons,
+            scenarios=self.config.lookahead.scenarios,
+            monte_carlo_sims=self.config.lookahead.monte_carlo_sims,
         )
-        
+
         # Initialize tracking and feedback
         self.ledger = LedgerEngine(
-            ledger_path=self.config.get("tracking.ledger_path", "data/ledger.jsonl")
+            ledger_path=self.config.tracking.ledger_path
         )
         self.feedback = FeedbackEngine(
-            reward_metric=self.config.get("feedback.reward_metric", "sharpe"),
-            learning_rate=self.config.get("feedback.learning_rate", 0.2)
+            reward_metric=self.config.feedback.reward_metric,
+            learning_rate=self.config.feedback.learning_rate,
+            window_size=self.config.feedback.window_size,
         )
-        
+
         # Initialize checkpointing
-        if self.config.get("runtime.enable_checkpointing", True):
+        if self.config.runtime.enable_checkpointing:
             self.checkpoint = CheckpointEngine(
-                checkpoint_dir=self.config.get("runtime.checkpoints_dir", "logs/checkpoints")
+                checkpoint_dir=self.config.runtime.checkpoints_dir
             )
         else:
             self.checkpoint = None
@@ -80,20 +82,20 @@ class PipelineRunner:
         # Initialize agents
         self.logger.info("Initializing agents...")
         self.hedge_agent = PrimaryHedgeAgent(
-            confidence_threshold=self.config.get("agents.primary_hedge.confidence_threshold", 0.5),
+            confidence_threshold=self.config.agents.primary_hedge.confidence_threshold,
             lookahead_engine=self.lookahead_engine
         )
         self.volume_agent = PrimaryVolumeAgent(
-            confidence_threshold=self.config.get("agents.primary_volume.confidence_threshold", 0.5),
+            confidence_threshold=self.config.agents.primary_volume.confidence_threshold,
             lookahead_engine=self.lookahead_engine
         )
         self.sentiment_agent = PrimarySentimentAgent(
-            confidence_threshold=self.config.get("agents.primary_sentiment.confidence_threshold", 0.5),
+            confidence_threshold=self.config.agents.primary_sentiment.confidence_threshold,
             lookahead_engine=self.lookahead_engine
         )
         self.composer = ComposerAgent(
-            voting_method=self.config.get("agents.composer.voting_method", "weighted_confidence"),
-            min_agreement_score=self.config.get("agents.composer.min_agreement_score", 0.6),
+            voting_method=self.config.agents.composer.voting_method,
+            min_agreement_score=self.config.agents.composer.min_agreement_score,
             lookahead_engine=self.lookahead_engine
         )
         
@@ -130,7 +132,7 @@ class PipelineRunner:
         
         # Step 4: Run primary agents
         self.logger.info("Running primary agents...")
-        horizons = self.config.get("lookahead.horizons", [1, 5, 20])
+        horizons = self.config.lookahead.horizons
         
         hedge_suggestion = self.hedge_agent.step(snapshot, horizons)
         volume_suggestion = self.volume_agent.step(snapshot, horizons)
@@ -156,7 +158,7 @@ class PipelineRunner:
                 side="long" if "long" in composed_suggestion.action or "call" in composed_suggestion.action else "short",
                 size=1.0,
                 entry_price=450.0,  # Demo price
-                entry_time=datetime.now().timestamp(),
+                entry_time=datetime.now(),
                 strategy_type=composed_suggestion.action,
                 legs=[],
                 metadata={"suggestion_id": composed_suggestion.id}
@@ -180,7 +182,7 @@ class PipelineRunner:
             result = Result(
                 id=composed_suggestion.id,
                 exit_price=exit_price,
-                exit_time=datetime.now().timestamp(),
+                exit_time=datetime.now(),
                 pnl=pnl,
                 pnl_pct=pnl / position.entry_price,
                 realized_horizon=max(horizons),
@@ -188,9 +190,9 @@ class PipelineRunner:
             )
             self.ledger.log_result(result)
             self.logger.info(f"Closed position: pnl=${pnl:.2f}")
-            
+
             # Step 9: Feedback
-            reward = self.feedback.compute_reward(result.to_dict())
+            reward = self.feedback.compute_reward(result.model_dump())
             
             # Update per-agent scores
             self.feedback.update_agent_score("primary_hedge", reward * hedge_suggestion.confidence)

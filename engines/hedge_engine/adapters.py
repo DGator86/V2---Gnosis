@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
@@ -119,7 +120,9 @@ def build_inputs_from_raw(
     config: HedgeEngineConfig | None = None,
 ) -> HedgeEngineInputs:
     spot = _infer_spot_from_inputs(raw)
-    timestamp = pd.to_datetime(raw.timestamp, unit="s", utc=True).tz_convert(None)
+    timestamp = pd.Timestamp(raw.timestamp)
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.tz_convert(None)
 
     underlying = UnderlyingSnapshot(
         symbol=raw.symbol,
@@ -150,7 +153,7 @@ def build_inputs_from_raw(
 def summarize_output_to_engine_output(
     output: HedgeEngineOutput,
     *,
-    timestamp: float,
+    timestamp: datetime,
 ) -> EngineOutput:
     price_grid = np.array(output.fields.price_grid)
     gamma_field = np.array(output.fields.gamma_field)
@@ -181,9 +184,9 @@ def summarize_output_to_engine_output(
     metadata = {
         "tenor_count": output.options_surface_meta.get("tenor_count", 0.0),
         "effective_liquidity": output.options_surface_meta.get("effective_liquidity", 0.0),
-        "elasticity": output.elasticity_summary.dict(),
-        "structural": output.structural.dict(),
-        "fields": output.fields.dict(),
+        "elasticity": output.elasticity_summary.model_dump(),
+        "structural": output.structural.model_dump(),
+        "fields": output.fields.model_dump(),
     }
 
     return EngineOutput(
