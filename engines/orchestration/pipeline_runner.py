@@ -9,7 +9,8 @@ import uuid
 
 from schemas import RawInputs, StandardSnapshot, Suggestion, Position, Result
 from engines.inputs.demo_inputs_engine import DemoInputsEngine
-from engines.hedge.hedge_engine import HedgeEngine
+from engines.hedge_engine import HedgeEngine
+from engines.hedge_engine.adapters import run_hedge_engine_from_raw
 from engines.volume.volume_engine import VolumeEngine
 from engines.sentiment.sentiment_engine import SentimentEngine
 from engines.standardization.standardizer_engine import StandardizerEngine
@@ -44,9 +45,7 @@ class PipelineRunner:
         # Initialize engines
         self.logger.info("Initializing engines...")
         self.inputs_engine = DemoInputsEngine()
-        self.hedge_engine = HedgeEngine(
-            polars_threads=self.config.get("engines.hedge.polars_threads", 4)
-        )
+        self.hedge_engine = HedgeEngine()
         self.volume_engine = VolumeEngine(
             window_bars=self.config.get("engines.volume.window_bars", 20)
         )
@@ -118,7 +117,10 @@ class PipelineRunner:
         
         # Step 2: Run engines
         self.logger.info("Running engines...")
-        hedge_output = self.hedge_engine.run(raw_inputs.options)
+        _, hedge_output = run_hedge_engine_from_raw(
+            raw_inputs,
+            self.hedge_engine,
+        )
         volume_output = self.volume_engine.run(raw_inputs.trades, raw_inputs.orderbook)
         sentiment_output = self.sentiment_engine.run(raw_inputs.news)
         

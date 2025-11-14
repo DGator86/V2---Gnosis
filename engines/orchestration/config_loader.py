@@ -33,7 +33,7 @@ class ConfigEngine:
     def get(self, key: str, default: Any = None) -> Any:
         """
         Get config value using dot notation
-        Example: config.get("engines.hedge.polars_threads", 4)
+        Example: config.get("engines.hedge.price_grid_pct_width", 0.08)
         """
         keys = key.split('.')
         value = self._config
