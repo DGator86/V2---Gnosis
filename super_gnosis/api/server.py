@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import List
+
 from fastapi import FastAPI, Depends
 from pydantic import BaseModel
-from typing import List
 
 from core.schemas import (
     MarketTick,
@@ -17,11 +18,16 @@ from engines.hedge_engine import HedgeEngine
 from engines.liquidity_engine import LiquidityEngine
 from engines.sentiment_engine import SentimentEngine
 from engines.standardizer import StandardizerEngine
-from agents.hedge_agent import HedgeAgent
-from agents.liquidity_agent import LiquidityAgent
-from agents.sentiment_agent import SentimentAgent
-from composer.composer_agent import ComposerAgent
-from trade.trade_agent import TradeAgent
+from ..agents.base import (
+    EngineTimeSeries,
+    TimeContext,
+    DEFAULT_LOOKBACK_LOOKFORWARD_CONFIG,
+)
+from ..agents.hedge_agent import HedgeAgent
+from ..agents.liquidity_agent import LiquidityAgent
+from ..agents.sentiment_agent import SentimentAgent
+from ..composer.composer_agent import ComposerAgent
+from ..trade.trade_agent import TradeAgent
 from ml.registry import ModelRegistry
 from .dependencies import get_model_registry
 
@@ -43,6 +49,31 @@ class RunBarResponse(BaseModel):
     trades: List[TradeIdea]
 
 
+def _bootstrap_time_context(
+    hedge_sig,
+    liq_sig,
+    sent_sig,
+) -> TimeContext:
+    """Project single-snapshot engine outputs into multi-scale context."""
+
+    config = DEFAULT_LOOKBACK_LOOKFORWARD_CONFIG
+
+    def _series(signal) -> EngineTimeSeries:
+        lookback = {window: [signal] for window in config.lookback_windows}
+        lookforward = {horizon: [signal] for horizon in config.lookforward_horizons}
+        return EngineTimeSeries(lookback=lookback, lookforward=lookforward)
+
+    as_of = max(hedge_sig.timestamp, liq_sig.timestamp, sent_sig.timestamp)
+    return TimeContext(
+        as_of=as_of,
+        engine_time_series={
+            "hedge": _series(hedge_sig),
+            "liquidity": _series(liq_sig),
+            "sentiment": _series(sent_sig),
+        },
+    )
+
+
 @app.post("/run_bar", response_model=RunBarResponse)
 def run_bar(
     payload: RunBarRequest,
@@ -62,14 +93,16 @@ def run_bar(
     # TODO: incorporate standardized signals into downstream agents
     _ = std_sig
 
-    # Agents
-    hedge_agent = HedgeAgent()
-    liq_agent = LiquidityAgent()
-    sent_agent = SentimentAgent()
+    agent_context = _bootstrap_time_context(hedge_sig, liq_sig, sent_sig)
 
-    hedge_pkt = hedge_agent.run(hedge_sig)
-    liq_pkt = liq_agent.run(liq_sig)
-    sent_pkt = sent_agent.run(sent_sig)
+    # Agents
+    hedge_agent = HedgeAgent(DEFAULT_LOOKBACK_LOOKFORWARD_CONFIG)
+    liq_agent = LiquidityAgent(DEFAULT_LOOKBACK_LOOKFORWARD_CONFIG)
+    sent_agent = SentimentAgent(DEFAULT_LOOKBACK_LOOKFORWARD_CONFIG)
+
+    hedge_pkt = hedge_agent.run(agent_context)
+    liq_pkt = liq_agent.run(agent_context)
+    sent_pkt = sent_agent.run(agent_context)
 
     # Composer
     composer = ComposerAgent(model_registry)
