@@ -11,7 +11,5 @@ polars>=0.20.0  # For faster hedge engine computations
 # numpy>=1.24.0  # For numerical operations
 # pandas>=2.0.0  # Fallback for data processing
 
-# Development dependencies (optional)
-# pytest>=7.4.0
-# black>=23.0.0
-# flake8>=6.0.0
+# Development dependencies
+pytest>=7.4.0

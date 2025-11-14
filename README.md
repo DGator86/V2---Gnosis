@@ -177,6 +177,12 @@ webapp/
 # - News APIs (Bloomberg, Reuters, etc.)
 ```
 
+For production ingestion the `DataIngestionEngine` offers a hardened path from
+real-world providers into the pipeline. Implement a subclass of
+`MarketDataProvider` that wraps your broker or market-data vendor, then pass it
+to `DataIngestionEngine.fetch(symbol)` to receive a fully validated
+`RawInputs` payload with ordered timestamps and integrity checks.
+
 ### Engine Outputs
 ```python
 # Standardized EngineOutput
@@ -294,6 +300,19 @@ Logs are written to:
 - `logs/orchestration_*.log`
 - `logs/engines_*.log`
 - `logs/agents_*.log`
+
+## Testing
+
+Automated validation is handled with `pytest`. Install the development
+dependencies and execute:
+
+```bash
+pip install -r requirements.txt
+pytest
+```
+
+The suite covers standardisation logic and the live data ingestion engine,
+providing regression protection for regime detection and provider integrations.
 
 ## Metrics & Evaluation
 
