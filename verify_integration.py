@@ -109,7 +109,7 @@ def main():
         print(f"  ❌ Schema import failed: {e}")
     
     try:
-        from engines.hedge.hedge_engine import HedgeEngine
+        from engines.hedge_engine import HedgeEngine
         engine = HedgeEngine()
         print(f"  ✅ Hedge engine instantiates")
     except Exception as e:
