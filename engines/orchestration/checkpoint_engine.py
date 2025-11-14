@@ -93,7 +93,7 @@ class CheckpointEngine:
     
     def cleanup_old(self, max_age_hours: int = 24):
         """Remove checkpoints older than max_age_hours"""
-        cutoff = datetime.now().timestamp() - (max_age_hours * 3600)
+        cutoff = datetime.now() - timedelta(hours=max_age_hours)
         removed_count = 0
         
         for cp_path in self.checkpoint_dir.glob("*.json"):

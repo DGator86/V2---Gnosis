@@ -96,7 +96,7 @@ class StandardizerEngine:
         
         # Create unified snapshot
         snapshot = StandardSnapshot(
-            timestamp=datetime.now().timestamp(),
+            timestamp=datetime.now(),
             symbol=symbol,
             hedge=hedge.features,
             volume=volume.features,

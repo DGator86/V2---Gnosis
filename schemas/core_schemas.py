@@ -2,189 +2,269 @@
 Core schemas for DHPE pipeline
 Defines all data structures used across engines and agents
 """
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional, Literal
-from datetime import datetime
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional, Union
 import json
 import uuid
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-@dataclass
-class RawInputs:
-    """Raw market data inputs"""
+
+TimestampInput = Union[int, float, str, datetime]
+
+
+def _coerce_datetime(value: TimestampInput) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value))
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise TypeError(f"Invalid datetime string: {value}") from exc
+    raise TypeError(f"Unsupported timestamp type: {type(value)!r}")
+
+
+class RawInputs(BaseModel):
+    """Raw market data inputs."""
+
     symbol: str
-    timestamp: float
+    timestamp: datetime
     options: List[Dict[str, Any]]
     trades: List[Dict[str, Any]]
     news: List[Dict[str, Any]]
     orderbook: Optional[Dict[str, Any]] = None
     fundamentals: Optional[Dict[str, Any]] = None
 
+    model_config = ConfigDict(extra="allow")
 
-@dataclass
-class EngineOutput:
-    """Standardized output from any engine"""
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
+
+
+class EngineOutput(BaseModel):
+    """Standardized output from any engine."""
+
     kind: Literal["hedge", "volume", "sentiment"]
     features: Dict[str, float]
-    metadata: Dict[str, Any]
-    timestamp: float
-    confidence: float = 1.0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
 
 
-@dataclass
-class StandardSnapshot:
-    """Unified snapshot consumed by all primary agents"""
-    timestamp: float
+class StandardSnapshot(BaseModel):
+    """Unified snapshot consumed by all primary agents."""
+
+    timestamp: datetime
     symbol: str
     hedge: Dict[str, float]
     volume: Dict[str, float]
     sentiment: Dict[str, float]
     regime: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
 
 
-@dataclass
-class Forecast:
-    """Look-ahead forecast from any horizon"""
+class Forecast(BaseModel):
+    """Look-ahead forecast from any horizon."""
+
     horizon: int  # bars/minutes
     exp_return: float
     risk: float
     prob_win: float
-    scenarios: Dict[str, float] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    scenarios: Dict[str, float] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
 
 
-@dataclass
-class Suggestion:
-    """Suggestion emitted by primary agents or composer"""
+class Suggestion(BaseModel):
+    """Suggestion emitted by primary agents or composer."""
+
     id: str
     layer: Literal["primary_hedge", "primary_volume", "primary_sentiment", "composer"]
     symbol: str
     action: str  # 'long', 'short', 'hold', 'spread:call_debit', etc.
-    params: Dict[str, Any]
-    confidence: float
+    params: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = Field(ge=0.0, le=1.0)
     forecast: Forecast
-    timestamp: float
+    timestamp: datetime
     reasoning: Optional[str] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
-        d['forecast'] = asdict(self.forecast)
-        return d
-    
-    @staticmethod
-    def create(layer: str, symbol: str, action: str, params: Dict[str, Any],
-               confidence: float, forecast: Forecast, reasoning: str = None) -> 'Suggestion':
-        return Suggestion(
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
+
+    @classmethod
+    def create(
+        cls,
+        layer: str,
+        symbol: str,
+        action: str,
+        params: Dict[str, Any],
+        confidence: float,
+        forecast: Forecast,
+        reasoning: Optional[str] = None,
+    ) -> "Suggestion":
+        return cls(
             id=str(uuid.uuid4())[:8],
-            layer=layer,
+            layer=layer,  # type: ignore[arg-type]
             symbol=symbol,
             action=action,
             params=params,
             confidence=confidence,
             forecast=forecast,
-            timestamp=datetime.now().timestamp(),
-            reasoning=reasoning
+            timestamp=datetime.now(),
+            reasoning=reasoning,
         )
 
 
-@dataclass
-class Position:
-    """Opened position (linked to suggestion)"""
+class Position(BaseModel):
+    """Opened position (linked to suggestion)."""
+
     id: str  # matches suggestion id
     symbol: str
     side: Literal["long", "short", "flat"]
     size: float
     entry_price: float
-    entry_time: float
+    entry_time: datetime
     strategy_type: str  # 'directional', 'spread', 'hedge'
-    legs: List[Dict[str, Any]] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    legs: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("entry_time", mode="before")
+    @classmethod
+    def _parse_entry_time(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
 
 
-@dataclass
-class Result:
-    """Result of a closed position (linked to suggestion)"""
+class Result(BaseModel):
+    """Result of a closed position (linked to suggestion)."""
+
     id: str  # matches suggestion id
     exit_price: float
-    exit_time: float
+    exit_time: datetime
     pnl: float
     pnl_pct: float
     realized_horizon: int
-    metrics: Dict[str, float] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    metrics: Dict[str, float] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("exit_time", mode="before")
+    @classmethod
+    def _parse_exit_time(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
 
 
-@dataclass
-class ToolEvent:
-    """Event from a tool call (for A2A comms)"""
+class ToolEvent(BaseModel):
+    """Event from a tool call (for A2A comms)."""
+
     tool: str
     success: bool
     latency_ms: int
     output: Dict[str, Any]
     error: Optional[str] = None
 
+    model_config = ConfigDict(extra="allow")
 
-@dataclass
-class A2AMessage:
-    """Agent-to-Agent communication message"""
+
+class A2AMessage(BaseModel):
+    """Agent-to-Agent communication message."""
+
     source_agent: str
     intent: str
     version: str
     payload: Dict[str, Any]
-    tools: List[ToolEvent] = field(default_factory=list)
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    
+    tools: List[ToolEvent] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
+
     def to_json(self) -> str:
-        return json.dumps(asdict(self))
-    
+        return json.dumps(self.model_dump(mode="json"))
+
     @staticmethod
-    def from_json(data: str) -> 'A2AMessage':
-        d = json.loads(data)
-        d['tools'] = [ToolEvent(**t) for t in d.get('tools', [])]
-        return A2AMessage(**d)
+    def from_json(data: str) -> "A2AMessage":
+        return A2AMessage.model_validate_json(data)
 
 
-@dataclass
-class MemoryItem:
-    """Single memory item with decay"""
+class MemoryItem(BaseModel):
+    """Single memory item with decay."""
+
     content: str
     embedding: Optional[List[float]]
-    timestamp: float
+    timestamp: datetime
     confidence: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def age_days(self, now: float = None) -> float:
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
+
+    def age_days(self, now: Optional[Union[datetime, float, int]] = None) -> float:
         if now is None:
-            now = datetime.now().timestamp()
-        return (now - self.timestamp) / 86400.0
+            now_dt = datetime.now()
+        elif isinstance(now, datetime):
+            now_dt = now
+        else:
+            now_dt = datetime.fromtimestamp(float(now))
+        return (now_dt - self.timestamp).total_seconds() / 86400.0
 
 
-@dataclass
-class Checkpoint:
-    """Orchestration checkpoint for resumable runs"""
+class Checkpoint(BaseModel):
+    """Orchestration checkpoint for resumable runs."""
+
     run_id: str
     agent_name: str
     step: int
     state: Dict[str, Any]
-    timestamp: float
+    timestamp: datetime
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _parse_timestamp(cls, value: TimestampInput) -> datetime:
+        return _coerce_datetime(value)
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self))
+        return json.dumps(self.model_dump(mode="json"))
 
     @staticmethod
-    def from_json(data: str) -> 'Checkpoint':
-        return Checkpoint(**json.loads(data))
+    def from_json(data: str) -> "Checkpoint":
+        return Checkpoint.model_validate_json(data)
 
 
 class TechnicalFeatures(BaseModel):
@@ -387,19 +467,19 @@ class MarketScenarioPacket(BaseModel):
         description="Full distribution made visible to Adaptation layer for recalibration.",
     )
     net_elasticity: float = Field(
-        ..., description="Composer fusion of Liquidity and Hedge elasticities for all agents.",
+        ..., description="Composer fusion of Liquidity and Hedge elasticities for all agents."
     )
     energy_to_move: float = Field(
-        ..., description="Energy metric shared with Trade Agent for target feasibility decisions.",
+        ..., description="Energy metric shared with Trade Agent for target feasibility decisions."
     )
     expected_path_shape: Literal["straight", "grind", "whipsaw", "parabolic"] = Field(
-        ..., description="Direct input to Trade Agent playbook selection.",
+        ..., description="Direct input to Trade Agent playbook selection."
     )
     horizon: int = Field(
         ..., description="Prediction horizon aligning with MLPredictionPacket outputs."
     )
     return_distribution: ReturnDistribution = Field(
-        ..., description="Composer-provided distribution reused by Adaptation layer for scoring.",
+        ..., description="Composer-provided distribution reused by Adaptation layer for scoring."
     )
     contributing_features: Dict[str, float] = Field(
         default_factory=dict,

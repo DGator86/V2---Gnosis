@@ -1,8 +1,10 @@
 # DHPE Pipeline Requirements
 
 # Core dependencies
+loguru>=0.7
+pydantic>=2.0
 pyyaml>=6.0
-pydantic>=1.10
+typer>=0.9
 
 # Optional: Performance enhancement
 polars>=0.20.0  # For faster hedge engine computations

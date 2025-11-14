@@ -4,6 +4,7 @@ Implements PII redaction, safe tool execution, and input validation
 Based on Marktechpost Security and Guardrails patterns
 """
 import re
+from datetime import datetime
 from typing import Dict, Any, List, Optional, Callable
 from ..orchestration.logger import get_logger
 
@@ -195,7 +196,7 @@ class GuardrailsEngine:
         For self-auditing guardrails
         """
         log_entry = {
-            "timestamp": datetime.now().timestamp(),
+            "timestamp": datetime.now().isoformat(),
             "action": action,
             "actor": actor,
             "risk_level": risk_level,
@@ -206,6 +207,3 @@ class GuardrailsEngine:
             logger.warning(f"High-risk action logged: {action} by {actor}")
         
         return log_entry
-
-
-from datetime import datetime
