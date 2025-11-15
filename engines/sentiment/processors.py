@@ -3,6 +3,7 @@ from __future__ import annotations
 """Sentiment processor interfaces."""
 
 from datetime import datetime
+from math import tanh
 from typing import Protocol, Tuple
 
 from engines.inputs.market_data_adapter import MarketDataAdapter
@@ -29,9 +30,12 @@ class NewsSentimentProcessor:
         items = self.adapter.fetch_news(symbol, self.config.get("lookback_hours", 24), now)
         if not items:
             return 0.0, 0.0
-        score = sum(1 for _ in items) / len(items)
-        normalized_score = max(-1.0, min(1.0, score))
-        return normalized_score, 0.5
+        sentiment_map = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
+        values = [sentiment_map.get(item.get("sentiment", "neutral"), 0.0) for item in items]
+        avg_score = sum(values) / len(values)
+        normalized_score = float(max(-1.0, min(1.0, avg_score)))
+        confidence = float(min(1.0, len(items) / 10))
+        return normalized_score, confidence
 
 
 class FlowSentimentProcessor:
@@ -41,7 +45,9 @@ class FlowSentimentProcessor:
         self.config = config
 
     def compute(self, symbol: str, now: datetime) -> Tuple[float, float]:
-        return 0.0, 0.0
+        bias = float(self.config.get("flow_bias", 0.0))
+        confidence = float(min(1.0, abs(bias)))
+        return max(-1.0, min(1.0, bias)), confidence
 
 
 class TechnicalSentimentProcessor:
@@ -57,6 +63,7 @@ class TechnicalSentimentProcessor:
         if data.is_empty():
             return 0.0, 0.0
         returns = data["close"].pct_change().drop_nulls()
-        score = float(returns.mean())
-        normalized_score = max(-1.0, min(1.0, score * 100))
-        return normalized_score, 0.5
+        momentum = float(returns.tail(lookback // 2).sum())
+        normalized_score = float(max(-1.0, min(1.0, tanh(momentum * 10))))
+        confidence = float(min(1.0, returns.len() / max(1, lookback)))
+        return normalized_score, confidence

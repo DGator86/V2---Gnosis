@@ -1,19 +1,22 @@
-"""Typed configuration access for Super Gnosis."""
+"""Typed configuration exports for Super Gnosis."""
 from .config_models import (
     AdaptersConfig,
     AgentsConfig,
     AppConfig,
     ComposerAgentConfig,
+    ElasticityConfig,
+    EnginesConfig,
     FeedbackConfig,
     HedgeConfig,
+    LiquidityConfig,
     LookaheadConfig,
     MemoryConfig,
     PrimaryAgentConfig,
     RuntimeConfig,
     SecurityConfig,
     SentimentConfig,
+    TradeAgentConfig,
     TrackingConfig,
-    VolumeConfig,
 )
 from .loader import load_config
 
@@ -22,15 +25,18 @@ __all__ = [
     "AgentsConfig",
     "AppConfig",
     "ComposerAgentConfig",
+    "ElasticityConfig",
+    "EnginesConfig",
     "FeedbackConfig",
     "HedgeConfig",
+    "LiquidityConfig",
     "LookaheadConfig",
     "MemoryConfig",
     "PrimaryAgentConfig",
     "RuntimeConfig",
     "SecurityConfig",
     "SentimentConfig",
+    "TradeAgentConfig",
     "TrackingConfig",
-    "VolumeConfig",
     "load_config",
 ]

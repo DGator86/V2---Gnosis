@@ -9,3 +9,4 @@ def run_dashboard(app_context: Dict[str, Any]) -> None:
     """Display key diagnostics (placeholder)."""
 
     _ = app_context
+    print("Dashboard stub – integrate Streamlit or your preferred UI here.")

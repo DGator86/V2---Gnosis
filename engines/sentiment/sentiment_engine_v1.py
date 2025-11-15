@@ -33,10 +33,11 @@ class SentimentEngineV1(Engine):
             regime = "quiet"
         else:
             weighted_score = sum(score * conf for score, conf in scores) / total_weight
+            weighted_score = max(-1.0, min(1.0, weighted_score))
             features = {
                 "sentiment_score": float(weighted_score),
                 "sentiment_confidence": float(min(1.0, total_weight / len(scores))),
-                "sentiment_energy": float(abs(weighted_score) * total_weight),
+                "sentiment_energy": float(abs(weighted_score) * min(1.0, total_weight / len(scores))),
                 "news_sentiment_score": float(scores[0][0]) if len(scores) > 0 else 0.0,
                 "flow_sentiment_score": float(scores[1][0]) if len(scores) > 1 else 0.0,
                 "technical_sentiment_score": float(scores[2][0]) if len(scores) > 2 else 0.0,

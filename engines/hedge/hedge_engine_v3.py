@@ -34,6 +34,7 @@ class HedgeEngineV3(Engine):
 
         features = self._compute_features(chain)
         regime = self._determine_regime(features)
+        potential_shape = self._classify_potential_shape(features)
         confidence = self._compute_confidence(chain, features)
 
         return EngineOutput(
@@ -43,6 +44,7 @@ class HedgeEngineV3(Engine):
             features=features,
             confidence=confidence,
             regime=regime,
+            metadata={"potential_shape": potential_shape},
         )
 
     def _compute_features(self, chain: pl.DataFrame) -> Dict[str, float]:
@@ -58,12 +60,12 @@ class HedgeEngineV3(Engine):
             "gamma_pressure": float(gamma_pressure),
             "vanna_pressure": float(vanna_pressure),
             "charm_pressure": float(charm_pressure),
+            "dealer_gamma_sign": 1.0 if gamma_pressure >= 0 else -1.0,
+            "hedge_regime_energy": float(abs(gamma_pressure) + abs(vanna_pressure)),
         }
 
-        features["gamma_sign"] = 1.0 if gamma_pressure >= 0 else -1.0
-        features["vanna_sign"] = 1.0 if vanna_pressure >= 0 else -1.0
-        features["hedge_regime_energy"] = float(abs(gamma_pressure) + abs(vanna_pressure))
-        features["vix_friction_factor"] = 0.0
+        features["vanna_charm_ratio"] = float(vanna_pressure / (abs(charm_pressure) + 1e-9))
+        features["gamma_charm_ratio"] = float(gamma_pressure / (abs(charm_pressure) + 1e-9))
 
         return features
 
@@ -88,3 +90,16 @@ class HedgeEngineV3(Engine):
         coverage = len(chain)
         max_coverage = self.config.get("max_chain_size", 5000)
         return float(min(1.0, coverage / max_coverage))
+
+    def _classify_potential_shape(self, features: Dict[str, float]) -> str:
+        gamma_pressure = features.get("gamma_pressure", 0.0)
+        vanna_pressure = features.get("vanna_pressure", 0.0)
+        charm_pressure = features.get("charm_pressure", 0.0)
+        vanna_ratio = abs(features.get("vanna_charm_ratio", 0.0))
+        gamma_ratio = abs(features.get("gamma_charm_ratio", 0.0))
+
+        if gamma_ratio < 0.5:
+            return "quadratic"
+        if vanna_ratio > 2.0 and gamma_pressure * charm_pressure < 0:
+            return "double_well"
+        return "cubic"

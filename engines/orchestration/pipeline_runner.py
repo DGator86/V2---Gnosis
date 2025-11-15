@@ -69,6 +69,16 @@ class PipelineRunner:
 
         timestamp = next(iter(engine_outputs.values())).timestamp if engine_outputs else datetime.utcnow()
 
+        regime = None
+        if engine_outputs:
+            primary = max(engine_outputs.values(), key=lambda o: o.confidence)
+            regime = primary.regime
+
+        metadata: Dict[str, str] = {}
+        for kind, output in engine_outputs.items():
+            for key, value in output.metadata.items():
+                metadata[f"{kind}_{key}"] = value
+
         return StandardSnapshot(
             symbol=self.symbol,
             timestamp=timestamp,
@@ -76,4 +86,6 @@ class PipelineRunner:
             liquidity=features("liquidity"),
             sentiment=features("sentiment"),
             elasticity=features("elasticity"),
+            regime=regime,
+            metadata=metadata,
         )

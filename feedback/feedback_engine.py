@@ -18,4 +18,11 @@ class FeedbackEngine:
     def update_parameters(self) -> Dict[str, Any]:
         records = list(self.store.stream())
         metrics = LedgerMetrics.compute(records)
-        return {"metrics": metrics}
+
+        adjustments: Dict[str, Any] = {}
+        target_sharpe = self.config.get("target_sharpe", 1.0)
+        current_sharpe = metrics.get("sharpe", 0.0)
+        if current_sharpe < target_sharpe:
+            adjustments["risk_scale"] = max(0.1, current_sharpe / max(target_sharpe, 1e-6))
+
+        return {"metrics": metrics, "adjustments": adjustments}

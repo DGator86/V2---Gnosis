@@ -1,16 +1,14 @@
-"""Input engines and provider interfaces."""
-from .demo_inputs_engine import DemoInputsEngine
-from .data_ingestion_engine import (
-    DataIngestionEngine,
-    DataIngestionError,
-    MarketDataProvider,
-    ProviderResponse,
-)
+"""Input adapter protocols for Super Gnosis."""
+from .market_data_adapter import MarketDataAdapter
+from .news_adapter import NewsAdapter
+from .options_chain_adapter import OptionsChainAdapter
+from .stub_adapters import StaticMarketDataAdapter, StaticNewsAdapter, StaticOptionsAdapter
 
 __all__ = [
-    "DemoInputsEngine",
-    "DataIngestionEngine",
-    "DataIngestionError",
-    "MarketDataProvider",
-    "ProviderResponse",
+    "MarketDataAdapter",
+    "NewsAdapter",
+    "OptionsChainAdapter",
+    "StaticMarketDataAdapter",
+    "StaticNewsAdapter",
+    "StaticOptionsAdapter",
 ]

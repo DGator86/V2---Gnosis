@@ -1,261 +1,85 @@
-# DHPE Pipeline - Quick Reference Card
+# Super Gnosis – Quick Reference
 
-## 🚀 Quick Start (3 Commands)
-
-```bash
-cd /home/user/webapp
-pip install -r requirements.txt  # Optional: adds Polars for 10x speedup
-python main.py                    # Run pipeline
-```
-
-## 📋 Common Commands
+## 🚀 Run It
 
 ```bash
-# Single run (default: SPY)
-python main.py
-
-# Different symbol
-python main.py --symbol QQQ
-
-# Backtest mode
-python main.py --backtest --runs 50
-
-# Verify installation
-python verify_integration.py
-
-# Check logs
-ls -lh logs/
-
-# Check ledger
-cat data/ledger.jsonl | jq .  # Pretty print
+pip install -e .[dev]
+python main.py run-once --symbol SPY
 ```
 
-## 📁 Key Files
+## 📦 Key Modules
 
 | File | Purpose |
-|------|---------|
-| `main.py` | Run the pipeline |
-| `config/config.yaml` | All configuration |
-| `data/ledger.jsonl` | Audit trail |
-| `logs/*.log` | Structured logs |
-| `README.md` | Full documentation |
-| `FINAL_SUMMARY.md` | Implementation summary |
+| --- | --- |
+| `schemas/core_schemas.py` | Canonical Pydantic data contracts |
+| `engines/hedge/hedge_engine_v3.py` | Dealer hedge pressure analytics |
+| `engines/liquidity/liquidity_engine_v1.py` | Liquidity and order flow metrics |
+| `engines/sentiment/sentiment_engine_v1.py` | News / flow / technical sentiment fusion |
+| `engines/elasticity/elasticity_engine_v1.py` | Price elasticity & energy model |
+| `agents/*.py` | Primary agents and composer |
+| `trade/trade_agent_v1.py` | Suggestion → TradeIdea translation |
+| `engines/orchestration/pipeline_runner.py` | Orchestrates one full pipeline pass |
+| `ledger/ledger_store.py` | JSONL ledger writer |
+| `feedback/feedback_engine.py` | Metrics driven feedback adjustments |
+| `backtest/runner.py` | Simple event-driven backtester |
 
-## ⚙️ Configuration Quick Tweaks
+## ⚙️ Configuration Snippets (`config/config.yaml`)
 
 ```yaml
-# config/config.yaml
-
-# Change forecast horizons
-lookahead:
-  horizons: [1, 5, 20, 60]  # bars/minutes
-
-# Change voting method
+engines:
+  hedge:
+    gamma_squeeze_threshold: 1_500_000
+  liquidity:
+    lookback: 30
+  sentiment:
+    bullish_threshold: 0.3
+  elasticity:
+    baseline_move_cost: 1.0
 agents:
-  composer:
-    voting_method: "weighted_confidence"  # majority, unanimous
-
-# Change reward metric
-feedback:
-  reward_metric: "sharpe"  # pnl, hit_rate, sortino
-  learning_rate: 0.2
-
-# Enable Polars for speed
-engines:
-  hedge:
-    polars_threads: 4
-
-# Adjust memory decay
-engines:
-  sentiment:
-    decay_half_life_days: 7.0
+  trade:
+    max_capital_per_trade: 10000
+tracking:
+  ledger_path: data/ledger.jsonl
 ```
 
-## 🔍 Inspecting Results
+Load config in code:
 
-### View Ledger Entries
-```bash
-# Count entries
-wc -l data/ledger.jsonl
-
-# View suggestions only
-grep SUGGESTION data/ledger.jsonl | jq .
-
-# View positions
-grep POSITION data/ledger.jsonl | jq .
-
-# View results
-grep RESULT data/ledger.jsonl | jq .
-```
-
-### View Logs
-```bash
-# Main execution log
-tail -f logs/main_*.log
-
-# Agent decisions
-tail -f logs/agents_*.log
-
-# Engine outputs
-tail -f logs/engines_*.log
-```
-
-### View Checkpoints
-```bash
-# List checkpoints
-ls -lh logs/checkpoints/
-
-# View checkpoint
-cat logs/checkpoints/[run_id]_[agent]_step[N].json | jq .
-```
-
-## 🔧 Customization Points
-
-### Replace Demo Data
-Edit `engines/inputs/demo_inputs_engine.py` or create new input engine
-
-### Add New Agent
-1. Copy `agents/primary_hedge/agent.py` as template
-2. Implement `step(snapshot, horizons)` method
-3. Add to `pipeline_runner.py`
-
-### Add New Engine
-1. Create `engines/your_engine/your_engine.py`
-2. Return `EngineOutput` with features
-3. Add to standardizer
-
-### Change Strategy Mapping
-Edit `agents/composer/agent.py`:
 ```python
-self.strategy_map = {
-    "long": "your_strategy",
-    "short": "your_strategy",
-    ...
-}
+from config import load_config
+cfg = load_config()
+print(cfg.agents.trade.max_capital_per_trade)
 ```
 
-## 📊 Metrics & Performance
+## 🧪 Testing
 
-### Get Metrics Programmatically
+```bash
+pytest
+```
+
+## 🔁 Backtesting
+
 ```python
-from engines.tracking.ledger_engine import LedgerEngine
+from datetime import datetime, timedelta
+from backtest.runner import BacktestRunner
+from main import build_pipeline
+from config import load_config
 
-ledger = LedgerEngine()
-metrics = ledger.get_metrics(
-    layer="primary_hedge",  # Filter by agent
-    symbol="SPY",           # Filter by symbol
-    lookback_hours=24       # Recent only
-)
-
+config = load_config()
+factory = lambda symbol: build_pipeline(symbol, config)
+runner = BacktestRunner(factory, data_source=None, config={"step": timedelta(days=1)})
+metrics = runner.run_backtest("SPY", datetime(2024, 1, 1), datetime(2024, 1, 5))
 print(metrics)
-# {
-#   "count": 50,
-#   "hit_rate": 0.62,
-#   "avg_pnl": 1.25,
-#   "sharpe": 1.45,
-#   ...
-# }
 ```
 
-### Get Learning Summary
-```python
-from engines.feedback.feedback_engine import FeedbackEngine
+## 🛠 Customisation Hooks
 
-feedback = FeedbackEngine()
-summary = feedback.get_learning_summary()
-print(summary['agent_scores'])
-print(summary['best_agent'])
-```
+- Implement adapters under `engines/inputs/` to replace stub data sources.
+- Extend engines while keeping `EngineOutput` fields intact.
+- Adjust agent behaviour via the config models (`config/config_models.py`).
+- Add broker execution by implementing `execution/broker_adapter.BrokerAdapter`.
 
-## 🐛 Troubleshooting
+## 📂 Logs & Ledger
 
-### Pipeline won't start
-```bash
-# Check Python version (need 3.8+)
-python --version
+Ledger entries append to `data/ledger.jsonl`. Stream them using `LedgerStore.stream()` or `cat data/ledger.jsonl`.
 
-# Check dependencies
-pip list | grep -E "pyyaml|polars"
-
-# Run verification
-python verify_integration.py
-```
-
-### Polars not found
-```bash
-# Install Polars (optional, for speed)
-pip install polars
-
-# Or continue without (automatic fallback)
-```
-
-### Config not loading
-```bash
-# Check YAML syntax
-python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
-
-# Use absolute path
-python main.py --config /absolute/path/to/config.yaml
-```
-
-### Logs not writing
-```bash
-# Check logs directory exists
-mkdir -p logs
-
-# Check permissions
-chmod 755 logs/
-```
-
-## 🎯 Performance Tuning
-
-```yaml
-# config/config.yaml
-
-# Speed up hedge engine (if Polars installed)
-engines:
-  hedge:
-    polars_threads: 8  # More threads
-
-# Reduce memory footprint
-engines:
-  sentiment:
-    max_memory_items: 1000  # Fewer items
-  
-memory:
-  long_term_max_items: 5000  # Smaller cache
-
-# Reduce checkpoint storage
-runtime:
-  enable_checkpointing: false  # Disable if not needed
-```
-
-## 📚 Documentation Map
-
-- **README.md** → User guide, architecture, examples
-- **FINAL_SUMMARY.md** → Implementation summary, statistics
-- **IMPLEMENTATION_COMPLETE.md** → Completion details, verification
-- **docs/INTEGRATION_SUMMARY.md** → Technical integration details
-- **QUICK_REFERENCE.md** → This file
-
-## 🆘 Getting Help
-
-1. **Read README.md** for full documentation
-2. **Check FINAL_SUMMARY.md** for implementation details
-3. **Run verify_integration.py** to check setup
-4. **View logs/** for runtime issues
-5. **Check config/config.yaml** for parameters
-
-## 🔗 Quick Links
-
-| What | Where |
-|------|-------|
-| Pipeline flow | README.md → Architecture |
-| Add real data | README.md → Extending the System |
-| Metrics API | README.md → Metrics & Evaluation |
-| Config options | config/config.yaml (inline docs) |
-| Example output | README.md → Example Output |
-
----
-
-**Pro Tip**: Run `python verify_integration.py` after any changes to ensure everything still works!
+Stay within these contracts to ensure compatibility with future Super Gnosis modules.
