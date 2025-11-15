@@ -2,8 +2,10 @@ from __future__ import annotations
 
 """Backtest runner skeleton."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict
+
+from ledger.ledger_metrics import LedgerMetrics
 
 
 class BacktestRunner:
@@ -15,4 +17,13 @@ class BacktestRunner:
         self.config = config
 
     def run_backtest(self, symbol: str, start: datetime, end: datetime) -> Dict[str, float]:
-        return {"sharpe": 0.0, "hit_rate": 0.0}
+        runner = self.pipeline_factory(symbol)
+        step = self.config.get("step", timedelta(days=1))
+
+        current = start
+        while current <= end:
+            runner.run_once(current)
+            current += step
+
+        records = list(runner.ledger_store.stream())  # type: ignore[attr-defined]
+        return LedgerMetrics.compute(records)

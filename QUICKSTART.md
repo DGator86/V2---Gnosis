@@ -1,180 +1,57 @@
-# Gnosis DHPE - Quick Start Guide
+# Super Gnosis Quick Start
 
-## Installation
+This guide walks through installing the Super Gnosis / DHPE v3 skeleton, running the pipeline, and exploring the core components.
 
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Verify Installation
+## 1. Install Dependencies
 
 ```bash
-python example_usage.py
+pip install -e .[dev]
 ```
 
-You should see output demonstrating all three engines working together.
+## 2. Run a Single Pipeline Pass
 
-## Basic Usage
+```bash
+python main.py run-once --symbol SPY
+```
 
-### Import the Engines
+The CLI uses stub adapters that generate deterministic synthetic data for options, market, and news feeds. Replace them with production adapters by implementing the protocols in `engines/inputs/` and passing them to `build_pipeline`.
+
+## 3. Project Map
+
+- `schemas/core_schemas.py` – Canonical Pydantic models shared across engines and agents.
+- `engines/*` – Hedge, Liquidity, Sentiment, and Elasticity engines plus orchestration.
+- `agents/*` – Primary agents and the composer that produce `Suggestion` objects.
+- `trade/trade_agent_v1.py` – Converts composed suggestions into executable `TradeIdea`s.
+- `ledger/` – JSONL ledger store and metrics utilities.
+- `feedback/feedback_engine.py` – Example feedback loop returning metric-based adjustments.
+- `models/` – Feature builder and lookahead model placeholders for ML driven forecasts.
+- `backtest/runner.py` – Replays the pipeline over a time window for quick simulations.
+- `scripts/` – Usage and verification helpers.
+
+## 4. Configuration
+
+The default configuration lives at `config/config.yaml`. Load it programmatically:
 
 ```python
-from engines import dhpe, liquidity, orderflow
-from config import get_dhpe_config
+from config import load_config
+
+app_config = load_config()
+print(app_config.engines.hedge.gamma_squeeze_threshold)
 ```
 
-### Load Configuration
+## 5. Tests
 
-```python
-config = get_dhpe_config()
+Run the bundled smoke and engine tests to confirm everything is wired up:
+
+```bash
+pytest
 ```
-
-### Prepare Your Data
-
-Your market data should be in pandas DataFrame format:
-
-```python
-import pandas as pd
-
-# Price bars with columns: ['timestamp', 'close', 'volume']
-bars_df = pd.DataFrame({
-    'timestamp': [...],  # datetime values
-    'close': [...],      # closing prices
-    'volume': [...]      # trading volume
-})
-
-# Options data with columns: ['strike', 'tau', 'gamma', 'vanna', 'charm', 'oi', 'mid_iv']
-options_df = pd.DataFrame({
-    'strike': [...],     # strike prices
-    'tau': [...],        # time to expiry (years)
-    'gamma': [...],      # gamma values
-    'vanna': [...],      # vanna values
-    'charm': [...],      # charm values
-    'oi': [...],         # open interest
-    'mid_iv': [...]      # mid implied volatility
-})
-```
-
-### Run the Analysis
-
-```python
-# 1. Compute liquidity
-lam = liquidity.estimate_amihud(bars_df, span=20)
-
-# 2. Compute DHPE sources (Gamma, Vanna, Charm densities)
-G, Vn, Ch = dhpe.sources(options_df, projector=config['projector'])
-
-# 3. Build Green's kernel
-K = dhpe.greens_kernel(lam, kappa=config['kernel']['kappa'])
-
-# 4. Compute pressure potential
-Pi = dhpe.potential(G, Vn, Ch, K, weights=config['weights'])
-
-# 5. Compute gradients
-grad = dhpe.gradient(Pi)      # Spatial gradient
-dPi = dhpe.dPi_dt(Pi)         # Temporal derivative
-
-# 6. Compute order flow
-dV, cvd = orderflow.compute(bars_df)
-```
-
-### Interpret Results
-
-- **λ (lambda)**: Amihud illiquidity - higher values indicate less liquid market
-- **Π (Pi)**: Pressure potential - represents dealer hedging pressure
-- **∂xΠ (grad)**: Spatial gradient - indicates pressure direction
-- **∂tΠ (dPi)**: Temporal derivative - indicates pressure rate of change
-- **ΔV (dV)**: Signed volume - directional flow per bar
-- **CVD**: Cumulative volume delta - aggregate buying/selling pressure
-
-## Working with Alpaca API
-
-### Get Configuration
-
-```python
-from config import get_alpaca_config
-alpaca_config = get_alpaca_config()
-```
-
-### Initialize Alpaca Client
-
-```python
-import alpaca_trade_api as tradeapi
-
-api = tradeapi.REST(
-    key_id=alpaca_config['key_id'],
-    secret_key=alpaca_config['secret_key'],
-    base_url=alpaca_config['base_url']
-)
-
-# Fetch historical bars
-bars = api.get_bars('SPY', '1Hour', limit=100).df
-```
-
-## Configuration
-
-Edit `config.py` to adjust DHPE parameters:
-
-```python
-DHPE_CONFIG = {
-    'kernel': {
-        'kappa': 0.1,  # Screening parameter (controls kernel width)
-    },
-    'weights': {
-        'alpha_G': 1.0,   # Gamma weight
-        'alpha_V': 0.5,   # Vanna weight  
-        'alpha_C': 0.3,   # Charm weight
-    },
-    'projector': {
-        'mode': 'sticky-delta',
-        'bins': 50,
-    },
-    'liquidity': {
-        'span': 20,  # EWMA smoothing window
-    },
-}
-```
-
-## Environment Variables
-
-All API credentials are stored in `.env` file (already configured from the credentials you provided).
-
-⚠️ **Security**: Never commit `.env` to version control!
 
 ## Next Steps
 
-1. **Review the code**: Check out `engines/dhpe.py`, `engines/liquidity.py`, and `engines/orderflow.py`
-2. **Implement TODOs**: The engines have placeholder implementations marked with `# TODO`
-3. **Add real data**: Connect to Alpaca API for live market data
-4. **Build signals**: Create trading signals based on DHPE outputs
-5. **Backtest**: Implement backtesting framework
+1. Swap stub adapters for real data sources (broker APIs, market data vendors, news feeds).
+2. Enrich each engine with your proprietary analytics while preserving the output schema contract.
+3. Extend the trade agent with broker integration or advanced strategy playbooks.
+4. Feed ledger metrics into the feedback engine to inform dynamic parameter tuning.
 
-## Common Issues
-
-### Import Errors
-
-If you see `ModuleNotFoundError`, ensure you're in the project directory and have installed dependencies:
-
-```bash
-cd /home/user/webapp
-pip install -r requirements.txt
-```
-
-### Data Format Errors
-
-Ensure your DataFrames have the correct column names:
-- `bars_df`: `['close', 'volume']` minimum required
-- `options_df`: `['strike', 'tau', 'gamma', 'vanna', 'charm', 'oi', 'mid_iv']`
-
-## Support
-
-For more details, see:
-- `README.md` - Full documentation
-- `example_usage.py` - Working examples
-- `engines/*.py` - Engine implementations
-
-## License
-
-Proprietary - All rights reserved
+The skeleton is intentionally modular—focus on one subsystem at a time and iterate until your production requirements are satisfied.
