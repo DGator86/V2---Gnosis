@@ -116,7 +116,9 @@ def compute_sharpe_ratio(
     
     # Compute variance
     var = sum((x - mean_excess) ** 2 for x in excess) / n
-    if var <= 0:
+    
+    # Use epsilon for numerical stability (floating-point precision)
+    if var < 1e-10:
         return 0.0
     
     std = math.sqrt(var)
