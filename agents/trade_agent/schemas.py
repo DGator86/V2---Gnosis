@@ -61,9 +61,10 @@ class OptionLeg(BaseModel):
     side: Literal["long", "short"]
     option_type: Literal["call", "put"]
     strike: float
-    expiry: str  # ISO date string e.g. "2025-08-15"
+    expiry: str  # ISO date string e.g. "2025-08-15" or "30DTE"
     quantity: int = 1
-    estimated_price: Optional[float] = None  # per contract
+    estimated_price: Optional[float] = None  # per contract (deprecated)
+    mid_price: Optional[float] = None  # Current mid price per contract
 
 
 class StrategyGreeks(BaseModel):
@@ -80,6 +81,7 @@ class StrategyGreeks(BaseModel):
 class TradeIdea(BaseModel):
     """
     Canonical representation of a trade idea returned by the Trade Agent.
+    Enhanced with comprehensive risk metrics and exit management.
     """
 
     asset: str
@@ -89,15 +91,29 @@ class TradeIdea(BaseModel):
     # Structure
     legs: List[OptionLeg] = Field(default_factory=list)
 
-    # Economics
+    # Economics (enhanced)
     total_cost: Optional[float] = None
     max_risk: Optional[float] = None
     max_profit: Optional[float] = None
+    max_loss: Optional[float] = None  # Absolute max loss
+    
+    # Risk metrics (new)
+    breakeven_prices: Optional[List[float]] = Field(default_factory=list)
+    profit_probability: Optional[float] = None  # 0-1 estimate
+    risk_reward_ratio: Optional[float] = None  # max_profit / max_loss
+    return_on_risk: Optional[float] = None  # max_profit / capital_required
+    capital_required: Optional[float] = None  # Total debit
 
     # Risk management
     recommended_size: Optional[int] = None
     stop_loss: Optional[float] = None
     target_price: Optional[float] = None
+    
+    # Exit rules (new)
+    profit_target_pct: Optional[float] = None
+    stop_loss_pct: Optional[float] = None
+    max_days_to_expiry: Optional[int] = None
+    trailing_stop_pct: Optional[float] = None
 
     # Meta
     timeframe: Optional[Timeframe] = None
