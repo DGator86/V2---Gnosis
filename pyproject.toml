@@ -37,3 +37,8 @@ select = ["E", "F", "I"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+
+[tool.pytest.ini_options]
+markers = [
+    "regime_slow: Long-running regime-specific performance tests (deselect with '-m \"not regime_slow\"')",
+]
