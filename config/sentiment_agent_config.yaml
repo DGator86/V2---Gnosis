@@ -1,0 +1,31 @@
+# config/sentiment_agent_config.yaml
+
+direction:
+  bullish_osc_threshold: 0.6
+  bullish_breadth_threshold: 0.3
+  bullish_flow_threshold: 0.2
+  bearish_osc_threshold: -0.6
+  bearish_breadth_threshold: -0.3
+  bearish_flow_threshold: -0.2
+  range_osc_max_abs: 0.4
+  range_breadth_max_abs: 0.2
+
+strength:
+  osc_weight: 0.35
+  breadth_weight: 0.25
+  flow_weight: 0.20
+  energy_weight: 0.20
+  expansion_multiplier: 1.10
+
+confidence_haircuts:
+  transition_regime: 0.70
+  sideways_regime: 0.85
+  negative_divergence: 0.60
+  expansion_no_osc: 0.75
+  negative_divergence_threshold: -0.5
+
+defaults:
+  chaotic_confidence_threshold: 0.20
+  min_confidence: 0.0
+  max_confidence: 1.0
+  max_strength: 1.0
