@@ -8,7 +8,7 @@ Tests cover:
 - Integration scenarios
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 import numpy as np
 import polars as pl
@@ -39,7 +39,7 @@ from engines.sentiment.sentiment_engine_v1_full import SentimentEngineV1
 @pytest.fixture
 def sample_ohlcv():
     """Create sample OHLCV data for testing."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     periods = 100
     
     # Create trending data
@@ -69,7 +69,7 @@ def sample_ohlcv():
 @pytest.fixture
 def mean_revert_ohlcv():
     """Create mean-reverting OHLCV data."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     periods = 100
     
     base_price = 100.0
@@ -339,7 +339,7 @@ def test_sentiment_engine_basic_integration():
     adapter = StaticMarketDataAdapter()
     engine = SentimentEngineV1(adapter)
     
-    envelope = engine.process("SPY", datetime.utcnow())
+    envelope = engine.process("SPY", datetime.now(timezone.utc))
     
     # Check envelope structure
     assert envelope.bias in ["bullish", "bearish", "neutral"]
@@ -357,7 +357,7 @@ def test_sentiment_engine_trending_market(sample_ohlcv):
             return sample_ohlcv
     
     engine = SentimentEngineV1(TrendingAdapter())
-    envelope = engine.process("SPY", datetime.utcnow())
+    envelope = engine.process("SPY", datetime.now(timezone.utc))
     
     # In trending market, should likely show bullish bias (data is uptrending)
     # But we don't enforce specific bias due to noise
@@ -372,7 +372,7 @@ def test_sentiment_engine_mean_revert_market(mean_revert_ohlcv):
             return mean_revert_ohlcv
     
     engine = SentimentEngineV1(MeanRevertAdapter())
-    envelope = engine.process("SPY", datetime.utcnow())
+    envelope = engine.process("SPY", datetime.now(timezone.utc))
     
     # Mean-revert market might show different characteristics
     assert envelope.bias in ["bullish", "bearish", "neutral"]
@@ -386,7 +386,7 @@ def test_sentiment_engine_with_darkpool():
     engine = SentimentEngineV1(adapter)
     
     darkpool_data = {"dix": 0.48, "gex": -3.0}
-    envelope = engine.process("SPY", datetime.utcnow(), darkpool_data=darkpool_data)
+    envelope = engine.process("SPY", datetime.now(timezone.utc), darkpool_data=darkpool_data)
     
     # Should include flow data
     assert "flow" in envelope.drivers or len(envelope.drivers) > 0
@@ -398,7 +398,7 @@ def test_sentiment_engine_with_breadth():
     engine = SentimentEngineV1(adapter)
     
     breadth_data = {"advances": 400, "declines": 200}
-    envelope = engine.process("SPY", datetime.utcnow(), breadth_data=breadth_data)
+    envelope = engine.process("SPY", datetime.now(timezone.utc), breadth_data=breadth_data)
     
     # Should process successfully
     assert envelope.bias in ["bullish", "bearish", "neutral"]
@@ -409,7 +409,7 @@ def test_sentiment_engine_detailed_analysis():
     adapter = StaticMarketDataAdapter()
     engine = SentimentEngineV1(adapter)
     
-    details = engine.get_detailed_analysis("SPY", datetime.utcnow())
+    details = engine.get_detailed_analysis("SPY", datetime.now(timezone.utc))
     
     # Should have processor breakdowns
     assert "wyckoff" in details
@@ -428,7 +428,7 @@ def test_sentiment_engine_insufficient_data():
             return pl.DataFrame()
     
     engine = SentimentEngineV1(EmptyAdapter())
-    envelope = engine.process("SPY", datetime.utcnow())
+    envelope = engine.process("SPY", datetime.now(timezone.utc))
     
     # Should return neutral envelope
     assert envelope.bias == "neutral"
@@ -446,7 +446,7 @@ def test_sentiment_engine_partial_processor_failure(sample_ohlcv):
     engine.config.wyckoff.enabled = False
     engine.config.breadth.enabled = False
     
-    envelope = engine.process("SPY", datetime.utcnow())
+    envelope = engine.process("SPY", datetime.now(timezone.utc))
     
     # Should still produce valid output with remaining processors
     assert envelope.bias in ["bullish", "bearish", "neutral"]
@@ -459,7 +459,7 @@ def test_sentiment_engine_partial_processor_failure(sample_ohlcv):
 
 def test_processor_with_minimal_data():
     """Test processors with minimal data."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     minimal_df = pl.DataFrame({
         "timestamp": [now - timedelta(days=i) for i in range(5)],
         "open": [100.0] * 5,
@@ -479,7 +479,7 @@ def test_processor_with_minimal_data():
 
 def test_processor_with_flat_prices():
     """Test processors with flat/unchanging prices."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     flat_df = pl.DataFrame({
         "timestamp": [now - timedelta(days=i) for i in range(50)],
         "open": [100.0] * 50,

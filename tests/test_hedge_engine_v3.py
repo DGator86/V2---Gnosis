@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Integration tests for full Hedge Engine v3.0."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from engines.hedge.hedge_engine_v3 import HedgeEngineV3
 from engines.inputs.stub_adapters import StaticOptionsAdapter
@@ -11,7 +11,7 @@ from engines.inputs.stub_adapters import StaticOptionsAdapter
 def test_hedge_engine_full_pipeline():
     """Test complete hedge engine pipeline with all processors."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # Basic output validation
     assert output.kind == "hedge"
@@ -64,7 +64,7 @@ def test_hedge_engine_degraded_mode():
             return pl.DataFrame()
     
     engine = HedgeEngineV3(EmptyAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # Should return degraded output
     assert output.confidence == 0.0
@@ -81,7 +81,7 @@ def test_hedge_engine_with_configuration():
     }
     
     engine = HedgeEngineV3(StaticOptionsAdapter(), config)
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # Should still produce valid output
     assert output.kind == "hedge"
@@ -92,7 +92,7 @@ def test_hedge_engine_with_configuration():
 def test_hedge_engine_feature_types():
     """Test that all features have correct types."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # All features should be floats
     for key, value in output.features.items():
@@ -105,7 +105,7 @@ def test_hedge_engine_feature_types():
 def test_hedge_engine_pressure_consistency():
     """Test that pressure calculations are internally consistent."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # Net pressure should be up - down
     pressure_up = output.features["pressure_up"]
@@ -119,7 +119,7 @@ def test_hedge_engine_pressure_consistency():
 def test_hedge_engine_energy_elasticity_relationship():
     """Test the relationship between energy and elasticity."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     elasticity = output.features["elasticity"]
     movement_energy = output.features["movement_energy"]
@@ -136,7 +136,7 @@ def test_hedge_engine_energy_elasticity_relationship():
 def test_hedge_engine_dealer_gamma_sign():
     """Test that dealer gamma sign is in valid range."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     dealer_gamma_sign = output.features["dealer_gamma_sign"]
     
@@ -147,7 +147,7 @@ def test_hedge_engine_dealer_gamma_sign():
 def test_hedge_engine_cross_asset_correlation():
     """Test cross-asset correlation feature."""
     engine = HedgeEngineV3(StaticOptionsAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     if "cross_asset_correlation" in output.features:
         corr = output.features["cross_asset_correlation"]

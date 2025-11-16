@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Unit tests for core schemas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from schemas.core_schemas import EngineOutput, LedgerRecord, StandardSnapshot, Suggestion, TradeIdea, TradeLeg
 
@@ -11,7 +11,7 @@ def test_engine_output_roundtrip() -> None:
     output = EngineOutput(
         kind="hedge",
         symbol="SPY",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         features={"gamma": 1.0},
         confidence=0.9,
         regime="gamma_squeeze",
@@ -45,7 +45,7 @@ def test_trade_idea_structure() -> None:
 def test_ledger_record_structure() -> None:
     snapshot = StandardSnapshot(
         symbol="SPY",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         hedge={},
         liquidity={},
         sentiment={},
@@ -62,7 +62,7 @@ def test_ledger_record_structure() -> None:
         tags=[],
     )
     record = LedgerRecord(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         symbol="SPY",
         snapshot=snapshot,
         primary_suggestions=[suggestion],

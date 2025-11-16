@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agents.composer.composer_agent_v1 import ComposerAgentV1
@@ -58,7 +58,7 @@ def test_pipeline_smoke(tmp_path: Path) -> None:
         config={},
     )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = runner.run_once(now)
     assert result["snapshot"].symbol == "SPY"
     assert result["trade_ideas"], "Trade ideas should be generated"

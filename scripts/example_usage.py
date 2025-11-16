@@ -1,7 +1,7 @@
 """Example usage of the Super Gnosis pipeline."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import load_config
 from engines.inputs.stub_adapters import StaticMarketDataAdapter, StaticNewsAdapter, StaticOptionsAdapter
@@ -16,7 +16,7 @@ def main() -> None:
         "news": StaticNewsAdapter(),
     }
     runner = build_pipeline("SPY", config, adapters)
-    result = runner.run_once(datetime.utcnow())
+    result = runner.run_once(datetime.now(timezone.utc))
     print("Snapshot", result["snapshot"])
     print("Composite", result["composite_suggestion"])
     for idea in result["trade_ideas"]:

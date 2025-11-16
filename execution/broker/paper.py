@@ -19,7 +19,7 @@ deterministically for reliable CI/CD testing.
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import uuid4
@@ -144,7 +144,7 @@ class PaperBroker(AbstractBrokerAdapter):
             filled_quantity=order.get("filled_quantity", 0),
             remaining_quantity=order.get("remaining_quantity", 0),
             submitted_at=order.get("submitted_at"),
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(timezone.utc),
         )
 
     def cancel_order(self, broker_order_id: str) -> BrokerResponse:
@@ -174,7 +174,7 @@ class PaperBroker(AbstractBrokerAdapter):
 
         # Update status
         order["status"] = OrderStatus.CANCELLED
-        order["updated_at"] = datetime.utcnow()
+        order["updated_at"] = datetime.now(timezone.utc)
 
         return BrokerResponse(
             success=True,
@@ -203,7 +203,7 @@ class PaperBroker(AbstractBrokerAdapter):
         """Simulate order rejection."""
         self._orders[broker_order_id] = {
             "status": OrderStatus.REJECTED,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
         }
 
         return BrokerResponse(
@@ -226,7 +226,7 @@ class PaperBroker(AbstractBrokerAdapter):
             "fill_price": fill_price,
             "filled_quantity": filled_quantity,
             "remaining_quantity": 0,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
         }
 
         return BrokerResponse(
@@ -243,7 +243,7 @@ class PaperBroker(AbstractBrokerAdapter):
         """Simulate delayed fill (submitted, will fill later)."""
         self._orders[broker_order_id] = {
             "status": OrderStatus.SUBMITTED,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
             "will_fill_at": time.time() + self.delay_seconds,
             "fill_price": envelope.limit_price or 100.0,
             "filled_quantity": envelope.instruction.size_delta,
@@ -270,7 +270,7 @@ class PaperBroker(AbstractBrokerAdapter):
             "fill_price": fill_price,
             "filled_quantity": filled_quantity,
             "remaining_quantity": remaining_quantity,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
         }
 
         return BrokerResponse(
@@ -302,7 +302,7 @@ class PaperBroker(AbstractBrokerAdapter):
             "fill_price": fill_price,
             "filled_quantity": filled_quantity,
             "remaining_quantity": 0,
-            "submitted_at": datetime.utcnow(),
+            "submitted_at": datetime.now(timezone.utc),
         }
 
         return BrokerResponse(

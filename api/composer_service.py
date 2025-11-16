@@ -6,7 +6,7 @@ Exposes two main endpoints:
 - GET /composer/snapshot: Full transparency with engine directives and weights
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Dict, Any, Tuple
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -228,7 +228,7 @@ def get_composite_directive(
     composer, hedge_agent, liquidity_agent, sentiment_agent = composer_stack
     
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Run engines
         # Note: For real production, you'd pass symbol and now to engines
@@ -294,7 +294,7 @@ def get_composer_snapshot(
     composer, hedge_agent, liquidity_agent, sentiment_agent = composer_stack
     
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Similar engine execution as above
         # TODO: Wire real engine execution once adapters are production-ready

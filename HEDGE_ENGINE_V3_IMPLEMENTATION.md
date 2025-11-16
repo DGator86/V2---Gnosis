@@ -497,7 +497,7 @@ engine = HedgeEngineV3(
 )
 
 # Run
-output = engine.run("SPY", datetime.utcnow())
+output = engine.run("SPY", datetime.now(timezone.utc))
 
 # Access core metrics
 print(f"Elasticity: {output.features['elasticity']:.2f}")

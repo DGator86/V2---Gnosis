@@ -14,7 +14,7 @@ All schemas use Pydantic v2 for validation.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
@@ -64,7 +64,8 @@ class OrderEnvelope(BaseModel):
 
     # Timing
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Envelope creation timestamp"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Envelope creation timestamp",
     )
     submitted_at: Optional[datetime] = Field(
         None, description="Broker submission timestamp"
@@ -118,7 +119,8 @@ class ExecutionRecord(BaseModel):
     status: OrderStatus = Field(..., description="Current status")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update timestamp"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Last update timestamp",
     )
 
     # Instruction (serialized as JSON)
@@ -160,7 +162,8 @@ class BrokerResponse(BaseModel):
 
     # Timing
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Response timestamp"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Response timestamp",
     )
 
     # Error details (if failed)
@@ -191,7 +194,8 @@ class BrokerStatus(BaseModel):
     # Timing
     submitted_at: Optional[datetime] = Field(None, description="Submission time")
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update time"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Last update time",
     )
 
     # Additional info

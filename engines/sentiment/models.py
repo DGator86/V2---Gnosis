@@ -1,6 +1,6 @@
 """Internal Pydantic models for Sentiment Engine v1.0."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -219,7 +219,7 @@ class SentimentEnvelope(BaseModel):
     energy: float = Field(ge=0.0)  # Market metabolic expenditure
     confidence: float = Field(ge=0.0, le=1.0)  # Meta-confidence of fusion
     drivers: Dict[str, float]  # Top contributing signals with their values
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Optional detailed breakdowns (for debugging/analysis)
     wyckoff_phase: Optional[str] = None
