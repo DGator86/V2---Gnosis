@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from engines.inputs.stub_adapters import StaticMarketDataAdapter, StaticNewsAdapter
 from engines.sentiment.processors import FlowSentimentProcessor, NewsSentimentProcessor, TechnicalSentimentProcessor
@@ -14,7 +14,7 @@ def test_sentiment_engine_fuses_processors() -> None:
         TechnicalSentimentProcessor(StaticMarketDataAdapter(), {"lookback": 10}),
     ]
     engine = SentimentEngineV1(processors, {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     assert output.kind == "sentiment"
     assert -1.0 <= output.features["sentiment_score"] <= 1.0
     assert output.features["sentiment_energy"] >= 0.0

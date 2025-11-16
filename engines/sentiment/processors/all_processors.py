@@ -521,6 +521,9 @@ class OscillatorProcessor:
         else:
             d_value = k_value
         
+        # Clamp D to valid oscillator range
+        d_value = float(np.clip(d_value, 0.0, 100.0))
+
         # Crossovers
         if len(closes) >= self.stoch_k + self.stoch_d + 1:
             # Previous K and D

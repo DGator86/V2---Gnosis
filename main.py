@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Command line entrypoint for Super Gnosis pipeline."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -91,7 +91,7 @@ def run_once(symbol: str = typer.Option("SPY", help="Ticker symbol to evaluate."
 
     config = load_config()
     runner = build_pipeline(symbol, config)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = runner.run_once(now)
     typer.echo(result)
 

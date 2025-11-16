@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Sequence
 from uuid import uuid4
 
@@ -42,7 +42,7 @@ class TradeAgentV1(TradeAgent):
         if suggestion.confidence < self.config.get("min_confidence", 0.5):
             return []
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         chain = self.adapter.fetch_chain(suggestion.symbol, now)
         if isinstance(chain, pl.DataFrame) and chain.is_empty():
             return [self._stock_trade(suggestion)]

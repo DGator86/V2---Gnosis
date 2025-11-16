@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Pipeline orchestration for Super Gnosis."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from agents.base import ComposerAgent, PrimaryAgent, TradeAgent
@@ -67,7 +67,11 @@ class PipelineRunner:
             output = engine_outputs.get(kind)
             return output.features if output else {}
 
-        timestamp = next(iter(engine_outputs.values())).timestamp if engine_outputs else datetime.utcnow()
+        timestamp = (
+            next(iter(engine_outputs.values())).timestamp
+            if engine_outputs
+            else datetime.now(timezone.utc)
+        )
 
         regime = None
         if engine_outputs:

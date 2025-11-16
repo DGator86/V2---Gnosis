@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Comprehensive tests for Liquidity Engine v1.0."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import polars as pl
 import pytest
@@ -14,7 +14,7 @@ from engines.inputs.stub_adapters import StaticMarketDataAdapter
 def test_liquidity_engine_full_pipeline():
     """Test complete liquidity engine pipeline."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     # Basic validation
     assert output.kind == "liquidity"
@@ -71,7 +71,7 @@ def test_liquidity_engine_degraded_mode():
             return pl.DataFrame()
     
     engine = LiquidityEngineV1(EmptyAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert output.confidence == 0.0
     assert output.regime == "degraded"
@@ -88,7 +88,7 @@ def test_liquidity_engine_with_configuration():
     }
     
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), config)
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert output.kind == "liquidity"
     assert "liquidity_score" in output.features
@@ -97,7 +97,7 @@ def test_liquidity_engine_with_configuration():
 def test_liquidity_score_bounds():
     """Test that liquidity score stays in valid range."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     score = output.features["liquidity_score"]
     assert 0.0 <= score <= 1.0, f"Liquidity score {score} out of bounds"
@@ -106,7 +106,7 @@ def test_liquidity_score_bounds():
 def test_friction_cost_non_negative():
     """Test that friction costs are never negative."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     friction = output.features["friction_cost"]
     assert friction >= 0.0, f"Friction cost {friction} is negative"
@@ -115,7 +115,7 @@ def test_friction_cost_non_negative():
 def test_polr_metrics():
     """Test POLR (Path of Least Resistance) metrics."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     polr_direction = output.features["polr_direction"]
     polr_strength = output.features["polr_strength"]
@@ -130,7 +130,7 @@ def test_polr_metrics():
 def test_regime_classification():
     """Test regime classification is valid."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     valid_regimes = ["Normal", "Thin", "Stressed", "Crisis", "Abundant", "degraded"]
     assert output.regime in valid_regimes
@@ -139,7 +139,7 @@ def test_regime_classification():
 def test_wyckoff_phase_output():
     """Test Wyckoff phase is included in metadata."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert "wyckoff_phase" in output.metadata
     wyckoff_phase = output.metadata["wyckoff_phase"]
@@ -151,7 +151,7 @@ def test_wyckoff_phase_output():
 def test_compression_expansion_energy():
     """Test compression/expansion energy metrics."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     compression = output.features["compression_energy"]
     expansion = output.features["expansion_energy"]
@@ -164,7 +164,7 @@ def test_compression_expansion_energy():
 def test_structural_zone_counts():
     """Test structural zone counts are non-negative integers."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert output.features["num_absorption_zones"] >= 0
     assert output.features["num_displacement_zones"] >= 0
@@ -175,7 +175,7 @@ def test_structural_zone_counts():
 def test_order_flow_imbalance_bounds():
     """Test OFI stays in [-1, 1] range."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     ofi = output.features["orderbook_imbalance"]
     assert -1.0 <= ofi <= 1.0
@@ -184,7 +184,7 @@ def test_order_flow_imbalance_bounds():
 def test_volume_metrics_bounds():
     """Test volume metrics are in [0, 1] range."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert 0.0 <= output.features["volume_strength"] <= 1.0
     assert 0.0 <= output.features["buying_effort"] <= 1.0
@@ -194,7 +194,7 @@ def test_volume_metrics_bounds():
 def test_impact_metrics_non_negative():
     """Test impact metrics are non-negative."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert output.features["amihud_illiquidity"] >= 0.0
     assert output.features["kyle_lambda"] >= 0.0
@@ -203,6 +203,6 @@ def test_impact_metrics_non_negative():
 def test_confidence_in_valid_range():
     """Test overall confidence is in [0, 1]."""
     engine = LiquidityEngineV1(StaticMarketDataAdapter(), {})
-    output = engine.run("SPY", datetime.utcnow())
+    output = engine.run("SPY", datetime.now(timezone.utc))
     
     assert 0.0 <= output.confidence <= 1.0

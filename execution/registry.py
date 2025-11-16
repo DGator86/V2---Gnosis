@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
@@ -151,7 +151,7 @@ class ExecutionRegistry:
         # Append status transition to history
         record.status_history.append(
             {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "old_status": record.status.value,
                 "new_status": status.value,
                 "broker_order_id": broker_order_id,
@@ -163,7 +163,7 @@ class ExecutionRegistry:
 
         # Update current state
         record.status = status
-        record.updated_at = datetime.utcnow()
+        record.updated_at = datetime.now(timezone.utc)
 
         if broker_order_id:
             record.broker_order_id = broker_order_id
@@ -194,7 +194,7 @@ class ExecutionRegistry:
                 updated_at = ?
             WHERE order_id = ?
         """,
-            [datetime.utcnow(), str(order_id)],
+            [datetime.now(timezone.utc), str(order_id)],
         )
         self._conn.commit()
 
@@ -304,7 +304,7 @@ class ExecutionRegistry:
             idempotency_key=envelope.idempotency_key,
             status=envelope.status,
             created_at=envelope.created_at,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(timezone.utc),
             instruction_json=envelope.instruction.model_dump_json(),
             broker_order_id=envelope.broker_order_id,
             order_type=envelope.order_type.value,

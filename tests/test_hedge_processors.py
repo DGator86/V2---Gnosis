@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Comprehensive tests for hedge engine processors."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import polars as pl
 import pytest
@@ -43,7 +43,7 @@ def greek_inputs(sample_chain: pl.DataFrame) -> GreekInputs:
         vix=20.0,
         vol_of_vol=0.3,
         liquidity_lambda=0.1,
-        timestamp=datetime.utcnow().timestamp(),
+        timestamp=datetime.now(timezone.utc).timestamp(),
     )
 
 
@@ -302,7 +302,7 @@ def test_empty_chain_handling(config: dict):
         vix=20.0,
         vol_of_vol=0.0,
         liquidity_lambda=0.0,
-        timestamp=datetime.utcnow().timestamp(),
+        timestamp=datetime.now(timezone.utc).timestamp(),
     )
     
     # Dealer sign with empty chain
@@ -330,7 +330,7 @@ def test_short_gamma_regime_detection(greek_inputs: GreekInputs, config: dict):
         vix=20.0,
         vol_of_vol=0.3,
         liquidity_lambda=0.1,
-        timestamp=datetime.utcnow().timestamp(),
+        timestamp=datetime.now(timezone.utc).timestamp(),
     )
     
     dealer_sign = estimate_dealer_sign(inputs, config)
