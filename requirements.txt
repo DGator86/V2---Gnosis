@@ -11,7 +11,15 @@ polars>=0.20.0  # For faster hedge engine computations
 
 # Optional: Advanced features
 # numpy>=1.24.0  # For numerical operations
-# pandas>=2.0.0  # Fallback for data processing
+pandas>=2.0.0  # Required for backtesting harness
+
+# API dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+httpx>=0.25.0  # For TestClient
+
+# Execution Layer dependencies (Phase 8)
+duckdb>=0.9.0  # For execution registry persistence
 
 # Development dependencies
 pytest>=7.4.0
