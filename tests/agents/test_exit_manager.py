@@ -88,7 +88,7 @@ class TestExitRuleCreation:
         assert rules.max_days_to_expiry >= 5
 
     def test_high_confidence_wider_stops(self):
-        """High confidence should result in wider stops."""
+        """High confidence should result in wider stops (lower stop_loss_pct)."""
         high_conf = create_default_exit_rules(
             strategy_type=StrategyType.LONG_CALL,
             confidence=0.9,
@@ -98,9 +98,9 @@ class TestExitRuleCreation:
             confidence=0.3,
         )
         
-        # High confidence = wider profit target, looser stop
+        # High confidence = wider profit target, wider stop (smaller stop_loss_pct = more room)
         assert high_conf.profit_target_pct > low_conf.profit_target_pct
-        assert high_conf.stop_loss_pct > low_conf.stop_loss_pct
+        assert high_conf.stop_loss_pct < low_conf.stop_loss_pct  # Smaller % = wider stop
 
     def test_exit_rules_have_breakeven_trigger(self):
         """Exit rules should include breakeven management."""

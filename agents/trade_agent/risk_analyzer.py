@@ -224,13 +224,24 @@ def _estimate_option_price(
     intrinsic = max(0, underlying_price - leg.strike) if leg.option_type == "call" else max(0, leg.strike - underlying_price)
     
     # Time value (very rough approximation)
-    time_value = underlying_price * implied_vol * math.sqrt(time_to_expiry) * 0.4
+    base_time_value = underlying_price * implied_vol * math.sqrt(time_to_expiry) * 0.4
     
-    # Adjust based on moneyness
-    if moneyness < 0.95:  # OTM
-        time_value *= 0.5
-    elif moneyness > 1.05:  # ITM
-        time_value *= 0.7
+    # Adjust based on moneyness (distance from ATM affects time value)
+    # For calls: moneyness = underlying/strike. OTM when < 1.0, ITM when > 1.0
+    # For puts: moneyness = strike/underlying. OTM when < 1.0, ITM when > 1.0
+    # ATM (near 1.0) has highest time value
+    distance_from_atm = abs(1.0 - moneyness)
+    
+    if distance_from_atm <= 0.01:  # Within 1% of ATM
+        time_value = base_time_value
+    elif distance_from_atm <= 0.03:  # 1-3% away from ATM
+        time_value = base_time_value * 0.75
+    elif distance_from_atm <= 0.07:  # 3-7% away
+        time_value = base_time_value * 0.5
+    elif distance_from_atm <= 0.15:  # 7-15% away
+        time_value = base_time_value * 0.3
+    else:  # More than 15% away
+        time_value = base_time_value * 0.15
     
     return intrinsic + time_value
 

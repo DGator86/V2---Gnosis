@@ -567,7 +567,7 @@ def build_broken_wing_butterfly(
         timeframe=ctx.timeframe,
         confidence=ctx.confidence,
         greeks_profile=StrategyGreeks(
-            delta=0.15 if ctx.direction > 0 else -0.15,
+            delta=0.15 if ctx.direction == Direction.BULLISH else -0.15,
             gamma=-0.05,
             theta=0.3,
             vega=-0.2,
