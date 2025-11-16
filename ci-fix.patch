@@ -1,0 +1,33 @@
+From 1d198d38bb011e22699355ad113d69afe4574a2c Mon Sep 17 00:00:00 2001
+From: DGator86 <DGator86@users.noreply.github.com>
+Date: Sun, 16 Nov 2025 13:17:21 +0000
+Subject: [PATCH] fix(ci): Install package in editable mode before running
+ tests
+
+Fix ModuleNotFoundError in CI by adding 'pip install -e .' step.
+
+This ensures pytest can import local modules (agents, engines, execution)
+in the GitHub Actions environment.
+
+Resolves: GitHub Actions run 19406075225
+Fixes: #12
+---
+ .github/workflows/tests.yml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index 771bdbe..e94162b 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -23,5 +23,8 @@ jobs:
+           python -m pip install --upgrade pip
+           pip install -r requirements.txt
+ 
++      - name: Install package
++        run: pip install -e .
++
+       - name: Run pytest
+         run: pytest
+-- 
+2.39.5
+
