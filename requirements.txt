@@ -21,5 +21,9 @@ httpx>=0.25.0  # For TestClient
 # Execution Layer dependencies (Phase 8)
 duckdb>=0.9.0  # For execution registry persistence
 
+# Broker Integrations (Phase 3)
+alpaca-py>=0.43.0  # Alpaca broker API
+python-dotenv>=1.0.0  # Environment variable management
+
 # Development dependencies
 pytest>=7.4.0

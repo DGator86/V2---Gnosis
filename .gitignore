@@ -62,6 +62,9 @@ data/
 *.log
 logs/
 
+# Runtime data (paper trading runs)
+runs/
+
 # Testing
 .pytest_cache/
 .coverage

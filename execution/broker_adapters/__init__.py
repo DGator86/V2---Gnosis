@@ -12,8 +12,10 @@ Provides unified interface for multiple brokers:
 
 from .base import BrokerAdapter
 from .simulated_adapter import SimulatedBrokerAdapter
+from .alpaca_adapter import AlpacaBrokerAdapter
 
 __all__ = [
     "BrokerAdapter",
     "SimulatedBrokerAdapter",
+    "AlpacaBrokerAdapter",
 ]
