@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GreekInputs(BaseModel):
     """Raw Greek data extracted from options chain."""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     chain: pl.DataFrame
     spot: float

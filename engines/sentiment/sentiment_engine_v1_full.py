@@ -320,26 +320,26 @@ class SentimentEngineV1:
         try:
             wyckoff_output, wyckoff_signal = self.wyckoff_processor.process(df)
             results["wyckoff"] = {
-                "signals": wyckoff_output.dict(),
-                "sentiment": wyckoff_signal.dict(),
+                "signals": wyckoff_output.model_dump(),
+                "sentiment": wyckoff_signal.model_dump(),
             }
         except Exception as e:
             results["wyckoff"] = {"error": str(e)}
-        
+
         try:
             osc_output, osc_signal = self.oscillator_processor.process(df)
             results["oscillators"] = {
-                "signals": osc_output.dict(),
-                "sentiment": osc_signal.dict(),
+                "signals": osc_output.model_dump(),
+                "sentiment": osc_signal.model_dump(),
             }
         except Exception as e:
             results["oscillators"] = {"error": str(e)}
-        
+
         try:
             vol_output, vol_signal = self.volatility_processor.process(df)
             results["volatility"] = {
-                "signals": vol_output.dict(),
-                "sentiment": vol_signal.dict(),
+                "signals": vol_output.model_dump(),
+                "sentiment": vol_signal.model_dump(),
             }
         except Exception as e:
             results["volatility"] = {"error": str(e)}
@@ -347,8 +347,8 @@ class SentimentEngineV1:
         try:
             flow_output, flow_signal = self.flow_processor.process(df, darkpool_data)
             results["flow"] = {
-                "signals": flow_output.dict(),
-                "sentiment": flow_signal.dict(),
+                "signals": flow_output.model_dump(),
+                "sentiment": flow_signal.model_dump(),
             }
         except Exception as e:
             results["flow"] = {"error": str(e)}
@@ -356,8 +356,8 @@ class SentimentEngineV1:
         try:
             breadth_output, breadth_signal = self.breadth_processor.process(df, breadth_data)
             results["breadth"] = {
-                "signals": breadth_output.dict(),
-                "sentiment": breadth_signal.dict(),
+                "signals": breadth_output.model_dump(),
+                "sentiment": breadth_signal.model_dump(),
             }
         except Exception as e:
             results["breadth"] = {"error": str(e)}
@@ -365,14 +365,14 @@ class SentimentEngineV1:
         try:
             energy_output, energy_signal = self.energy_processor.process(df)
             results["energy"] = {
-                "signals": energy_output.dict(),
-                "sentiment": energy_signal.dict(),
+                "signals": energy_output.model_dump(),
+                "sentiment": energy_signal.model_dump(),
             }
         except Exception as e:
             results["energy"] = {"error": str(e)}
         
         # Get final envelope
         envelope = self.process(symbol, now, darkpool_data, breadth_data)
-        results["envelope"] = envelope.dict()
+        results["envelope"] = envelope.model_dump()
         
         return results
