@@ -1,0 +1,64 @@
+# config/liquidity_agent_config.yaml
+#
+# Configuration for Liquidity Agent v1.0 - Pure Interpreter
+#
+# All thresholds and haircuts for direction classification,
+# strength calculation, and confidence adjustments.
+
+# Direction classification thresholds
+direction:
+  # Below this absolute net_liquidity_pressure, classify as "balanced"
+  neutral_net_liquidity_abs_max: 0.05
+
+# Strength calculation weights
+strength:
+  # Weight for impact term (Amihud + Kyle lambda)
+  impact_weight: 0.5
+  
+  # Weight for liquidity gaps term
+  gaps_weight: 0.5
+  
+  # Weight for volatility of liquidity contribution
+  vol_of_liquidity_weight: 0.25
+
+# Confidence haircuts (multipliers applied to base confidence)
+confidence_haircuts:
+  # Vacuum regime multiplier
+  vacuum_regime: 0.60              # Liquidity vacuum = lower confidence
+  
+  # Transition regime multiplier
+  transition_regime: 0.70          # Noisy regime = haircut
+  
+  # Bad realized slippage multiplier
+  bad_slippage: 0.60               # Worse than expected slippage
+  
+  # High volatility of liquidity multiplier
+  high_vol_of_liquidity: 0.70      # Unstable microstructure
+  
+  # Threshold values for applying haircuts
+  realized_slippage_threshold: 0.3   # Above this = bad slippage
+  high_vol_of_liquidity_threshold: 0.4  # Above this = unstable liquidity
+
+# Threshold values for notes/annotations
+thresholds:
+  # Dark pool bias thresholds
+  dark_pool_bias_threshold: 0.5
+  
+  # Volume profile cliff threshold
+  volume_profile_cliff_threshold: 0.7
+  
+  # Liquidity gaps threshold
+  liquidity_gaps_threshold: 0.5
+  
+  # Order flow imbalance threshold
+  ofi_threshold: 0.5
+
+# Defaults and bounds
+defaults:
+  min_confidence: 0.0
+  max_confidence: 1.0
+  max_strength: 1.0
+
+# Chaotic detection
+chaotic_detection:
+  min_confidence_threshold: 0.2
