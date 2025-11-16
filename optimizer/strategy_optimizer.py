@@ -93,8 +93,13 @@ def _suggest_params(trial: "optuna.trial.Trial", bounds: List[OptimizationBounds
 
     for b in bounds:
         if b.step is not None:
-            # Integer / discrete sampling
-            params[b.name] = trial.suggest_int(b.name, int(b.low), int(b.high), step=int(b.step))
+            # Determine if int or float based on step size
+            if b.step >= 1.0 and b.low == int(b.low) and b.high == int(b.high):
+                # Integer sampling
+                params[b.name] = trial.suggest_int(b.name, int(b.low), int(b.high), step=int(b.step))
+            else:
+                # Float sampling with step
+                params[b.name] = trial.suggest_float(b.name, b.low, b.high, step=b.step)
         else:
             # Continuous sampling
             if b.is_log:
@@ -135,9 +140,15 @@ def run_optuna_optimization(
     if extra_study_kwargs is None:
         extra_study_kwargs = {}
 
+    # Use seed for reproducibility if provided
+    sampler = None
+    if config.seed is not None:
+        sampler = optuna.samplers.TPESampler(seed=config.seed)
+    
     study = optuna.create_study(
         study_name=config.study_name,
         direction=config.direction,
+        sampler=sampler,
         **extra_study_kwargs,
     )
 
