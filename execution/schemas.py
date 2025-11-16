@@ -19,7 +19,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from agents.portfolio.schemas import OrderInstruction
 
@@ -100,8 +100,7 @@ class OrderEnvelope(BaseModel):
     # Error tracking
     error_message: Optional[str] = Field(None, description="Error details if any")
 
-    class Config:
-        frozen = False  # Allow updates for status tracking
+    model_config = ConfigDict(frozen=False)  # Allow updates for status tracking
 
 
 class ExecutionRecord(BaseModel):
