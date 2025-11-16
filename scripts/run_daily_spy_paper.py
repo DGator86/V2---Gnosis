@@ -15,6 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 from pipeline.full_pipeline import (
     build_default_pipeline_components,
     create_alpaca_broker,
