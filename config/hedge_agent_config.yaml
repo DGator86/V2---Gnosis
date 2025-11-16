@@ -1,0 +1,59 @@
+# config/hedge_agent_config.yaml
+#
+# Configuration for Hedge Agent v3.0 - Pure Interpreter
+#
+# All thresholds and haircuts for direction classification,
+# strength calculation, and confidence adjustments.
+
+# Direction classification thresholds
+direction:
+  # Below this absolute net_pressure, classify as "neutral"
+  neutral_net_pressure_abs_max: 0.05
+  
+  # Strength thresholds for qualitative tags
+  weak_strength_max: 0.25       # Below this = "weak bull/bear"
+  strong_strength_min: 0.65      # Above this = "strong bull/bear"
+
+# Confidence haircuts (multipliers applied to base confidence)
+confidence_haircuts:
+  # Jump-risk regime multiplier
+  jump_regime: 0.35              # Severe haircut for jump-risk
+  
+  # Double-well regime multiplier
+  double_well_regime: 0.50       # Ambiguity haircut for dual attractors
+  
+  # Realized move mismatch multiplier
+  realized_mismatch: 0.55        # Haircut when prediction diverges from reality
+
+# Threshold values
+thresholds:
+  # Absolute net pressure threshold for neutral classification
+  neutral_net_pressure_abs_max: 0.05
+  
+  # Realized move score threshold below which to apply mismatch haircut
+  realized_mismatch_threshold: -0.5
+
+# Defaults and bounds
+defaults:
+  min_confidence: 0.0
+  max_confidence: 1.0
+  max_strength: 1.0
+
+# Strength calculation weights
+strength_weights:
+  gamma_curvature: 1.0           # Primary component
+  cross_gamma_friction: 0.5      # Secondary friction term
+  volatility_drag: 0.25          # Tertiary vol term
+
+# Chaotic detection
+chaotic_detection:
+  min_confidence_threshold: 0.2
+  unstable_regimes:
+    - "double_well"
+    - "jump"
+
+# Notes triggers (thresholds for adding interpretation notes)
+notes:
+  high_vanna_drift_threshold: 0.5
+  significant_charm_decay_threshold: 0.5
+  cross_asset_influence_threshold: 0.3

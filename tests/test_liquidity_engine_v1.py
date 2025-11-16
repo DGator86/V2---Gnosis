@@ -11,4 +11,6 @@ def test_liquidity_engine_metrics() -> None:
     output = engine.run("SPY", datetime.utcnow())
     assert output.kind == "liquidity"
     assert "amihud_illiquidity" in output.features
-    assert "volume_profile_magnet_score" in output.features
+    assert "liquidity_score" in output.features
+    assert "volume_strength" in output.features
+    assert "polr_direction" in output.features
