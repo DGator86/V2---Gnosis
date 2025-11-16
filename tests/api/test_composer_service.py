@@ -68,6 +68,7 @@ def test_root_redirects_to_docs():
 # ============================================================================
 
 @pytest.mark.skip(reason="Requires full engine wiring - placeholder for future")
+@pytest.mark.regime_slow
 def test_get_directive_success():
     """Test successful directive retrieval for SPY."""
     response = client.get("/composer/directive?symbol=SPY")
@@ -91,6 +92,7 @@ def test_get_directive_success():
 
 
 @pytest.mark.skip(reason="Requires full engine wiring - placeholder for future")
+@pytest.mark.regime_slow
 def test_get_directive_invalid_symbol():
     """Test directive endpoint with invalid symbol."""
     response = client.get("/composer/directive?symbol=INVALID")
@@ -109,6 +111,7 @@ def test_get_directive_missing_symbol():
 # ============================================================================
 
 @pytest.mark.skip(reason="Requires full engine wiring - placeholder for future")
+@pytest.mark.regime_slow
 def test_get_snapshot_success():
     """Test successful snapshot retrieval."""
     response = client.get("/composer/snapshot?symbol=SPY")
@@ -137,6 +140,7 @@ def test_get_snapshot_success():
 
 
 @pytest.mark.skip(reason="Requires full engine wiring - placeholder for future")
+@pytest.mark.regime_slow
 def test_snapshot_includes_regime_weights():
     """Test that snapshot includes regime weight breakdown."""
     response = client.get("/composer/snapshot?symbol=SPY")
@@ -171,6 +175,7 @@ def test_health_check_schema():
 
 
 @pytest.mark.skip(reason="Requires full engine wiring")
+@pytest.mark.regime_slow
 def test_directive_response_schema():
     """Test directive response conforms to schema."""
     response = client.get("/composer/directive?symbol=SPY")
@@ -182,6 +187,7 @@ def test_directive_response_schema():
 
 
 @pytest.mark.skip(reason="Requires full engine wiring")
+@pytest.mark.regime_slow
 def test_snapshot_response_schema():
     """Test snapshot response conforms to schema."""
     response = client.get("/composer/snapshot?symbol=SPY")
@@ -217,6 +223,7 @@ def test_snapshot_handles_engine_failure_gracefully():
 # ============================================================================
 
 @pytest.mark.skip(reason="Performance test - run manually")
+@pytest.mark.regime_slow
 def test_directive_response_time():
     """Test that directive endpoint responds within acceptable time."""
     import time
@@ -230,6 +237,7 @@ def test_directive_response_time():
 
 
 @pytest.mark.skip(reason="Performance test - run manually")
+@pytest.mark.regime_slow
 def test_snapshot_response_time():
     """Test that snapshot endpoint responds within acceptable time."""
     import time
