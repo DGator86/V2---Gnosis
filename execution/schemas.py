@@ -179,10 +179,10 @@ class Quote(BaseModel):
     model_config = ConfigDict(frozen=False)
     
     symbol: str
-    bid: float = Field(gt=0)
-    ask: float = Field(gt=0)
-    mid: float = Field(gt=0)
-    last: float = Field(gt=0)
+    bid: float = Field(ge=0)  # Allow 0 when market is closed
+    ask: float = Field(ge=0)  # Allow 0 when market is closed
+    mid: float = Field(ge=0)  # Allow 0 when market is closed
+    last: float = Field(ge=0)  # Allow 0 when market is closed
     bid_size: int = Field(ge=0, default=0)
     ask_size: int = Field(ge=0, default=0)
     timestamp: datetime
