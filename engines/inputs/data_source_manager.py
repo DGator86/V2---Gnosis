@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 # Import all adapters
-from engines.inputs.alpaca_adapter import AlpacaAdapter
+# from engines.inputs.alpaca_adapter import AlpacaAdapter  # TODO: Create alpaca_adapter in engines/inputs
 from engines.inputs.yfinance_adapter import YFinanceAdapter
 from engines.inputs.yahoo_options_adapter import YahooOptionsAdapter
 from engines.inputs.fred_adapter import FREDAdapter
@@ -161,27 +161,28 @@ class DataSourceManager:
         # Initialize status tracking
         self.status: Dict[DataSourceType, DataSourceStatus] = {}
         
-        # Initialize primary source (Alpaca)
+        # Initialize primary source (Alpaca) - DISABLED: alpaca_adapter not in engines/inputs
         self.alpaca = None
-        if alpaca_api_key and alpaca_api_secret:
-            try:
-                self.alpaca = AlpacaAdapter(
-                    api_key=alpaca_api_key,
-                    api_secret=alpaca_api_secret,
-                    paper=alpaca_paper
-                )
-                self.status[DataSourceType.ALPACA] = DataSourceStatus(
-                    source_type=DataSourceType.ALPACA,
-                    is_available=True
-                )
-                logger.info("✅ Alpaca adapter initialized (primary)")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Alpaca: {e}")
-                self.status[DataSourceType.ALPACA] = DataSourceStatus(
-                    source_type=DataSourceType.ALPACA,
-                    is_available=False,
-                    last_error=str(e)
-                )
+        # TODO: Move alpaca_adapter to engines/inputs or use engines/execution/alpaca_executor
+        # if alpaca_api_key and alpaca_api_secret:
+        #     try:
+        #         self.alpaca = AlpacaAdapter(
+        #             api_key=alpaca_api_key,
+        #             api_secret=alpaca_api_secret,
+        #             paper=alpaca_paper
+        #         )
+        #         self.status[DataSourceType.ALPACA] = DataSourceStatus(
+        #             source_type=DataSourceType.ALPACA,
+        #             is_available=True
+        #         )
+        #         logger.info("✅ Alpaca adapter initialized (primary)")
+        #     except Exception as e:
+        #         logger.warning(f"Failed to initialize Alpaca: {e}")
+        #         self.status[DataSourceType.ALPACA] = DataSourceStatus(
+        #             source_type=DataSourceType.ALPACA,
+        #             is_available=False,
+        #             last_error=str(e)
+        #         )
         
         # Initialize backup source (IEX)
         self.iex = None
