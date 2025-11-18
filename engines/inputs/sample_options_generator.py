@@ -235,18 +235,18 @@ def generate_sample_chain_for_testing(
     
     Args:
         symbol: Symbol (for logging purposes)
-        spot: Current spot price (if None, fetches from yfinance)
+        spot: Current spot price (REQUIRED - yfinance removed, must provide spot)
         
     Returns:
         Polars DataFrame with sample options chain
     """
     # Get spot price if not provided
     if spot is None:
-        try:
-            from engines.inputs.yfinance_adapter import get_ohlcv
-            df = get_ohlcv(symbol, period="1d", interval="1m")
-            spot = float(df["close"].tail(1)[0])
-            logger.info(f"Fetched spot price for {symbol}: {spot:.2f}")
+        logger.error("NOTE: yfinance removed - spot price is now REQUIRED")
+        raise ValueError(
+            "spot parameter is required. yfinance has been removed. "
+            "Use Unusual Whales or Public.com to fetch current price first."
+        )
         except Exception as e:
             logger.warning(f"Could not fetch spot price, using default: {e}")
             spot = 450.0

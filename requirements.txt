@@ -39,7 +39,11 @@ fredapi>=0.5.0  # Federal Reserve Economic Data (macro regime features)
 ta>=0.11.0  # Technical Analysis Library (130+ indicators)
 # pyEX>=0.5.0  # IEX Cloud data (backup source) - DISABLED: metadata incompatible with pip 24.1+
 praw>=7.6.0  # Reddit API for WSB sentiment
-# greekcalc>=0.1.0  # Greeks calculator validation - OPTIONAL: uncomment if needed
+greekcalc>=0.3.0  # Greeks calculator validation - REQUIRED for tests
+# yfinance>=0.2.40  # REMOVED: No longer using yfinance
+pyarrow>=14.0.0  # Arrow format support - REQUIRED for tests
 
 # Development dependencies
 pytest>=7.4.0
+pytest-cov>=4.0.0
+pytest-asyncio>=0.21.0

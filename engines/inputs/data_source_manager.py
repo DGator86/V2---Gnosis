@@ -4,14 +4,17 @@ Unified Data Source Manager.
 Orchestrates all data sources with intelligent fallback, validation,
 and caching strategies. Provides a single interface for all market data needs.
 
-Data Source Hierarchy:
-1. Primary: Public.com (real-time quotes, historical, options)
-2. Backup: IEX Cloud (validation)
-3. Fallback: Alpaca (real-time, official)
-4. Macro: FRED (economic data)
-5. Sentiment: StockTwits + WSB (social)
-6. Dark Pool: Dark Pool Adapter (institutional flow)
-7. Short Volume: FINRA (short interest)
+Data Source Hierarchy (NEW - Unusual Whales Primary):
+1. Primary: Unusual Whales (options flow, chains, sentiment, market data)
+2. Backup: Public.com (real-time quotes, historical)
+3. Backup: IEX Cloud (validation)
+4. Fallback: Alpaca (real-time, official)
+5. Macro: FRED (economic data)
+6. Sentiment: StockTwits + WSB (social)
+7. Dark Pool: Dark Pool Adapter (institutional flow)
+8. Short Volume: FINRA (short interest)
+
+NOTE: yfinance and Polygon have been completely removed.
 """
 
 from typing import Dict, List, Optional, Any
@@ -22,9 +25,8 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 # Import all adapters
-# from engines.inputs.alpaca_adapter import AlpacaAdapter  # TODO: Create alpaca_adapter in engines/inputs
-from engines.inputs.yfinance_adapter import YFinanceAdapter
-from engines.inputs.yahoo_options_adapter import YahooOptionsAdapter
+from engines.inputs.unusual_whales_adapter import UnusualWhalesAdapter
+from engines.inputs.public_trading_adapter import PublicTradingAdapter
 from engines.inputs.fred_adapter import FREDAdapter
 from engines.inputs.dark_pool_adapter import DarkPoolAdapter
 from engines.inputs.short_volume_adapter import ShortVolumeAdapter
@@ -35,6 +37,7 @@ from engines.inputs.iex_adapter import IEXAdapter
 
 class DataSourceType(str, Enum):
     """Data source types."""
+    UNUSUAL_WHALES = "unusual_whales"  # NEW PRIMARY
     PUBLIC = "public"
     ALPACA = "alpaca"
     IEX = "iex"
@@ -79,11 +82,16 @@ class UnifiedMarketData(BaseModel):
     treasury_10y: Optional[float] = None
     yield_curve_slope: Optional[float] = None
     
-    # Options data
+    # Options data (NEW - from Unusual Whales)
     options_chain_available: bool = False
     num_options: int = 0
+    options_flow_alerts: int = 0
     
-    # Sentiment data
+    # Market sentiment (NEW - from Unusual Whales Market Tide)
+    market_tide: Optional[float] = None
+    unusual_whales_sentiment: Optional[float] = None
+    
+    # Sentiment data (traditional)
     stocktwits_sentiment: Optional[float] = None
     wsb_sentiment: Optional[float] = None
     wsb_mentions: Optional[int] = None
@@ -103,22 +111,26 @@ class UnifiedMarketData(BaseModel):
 
 class DataSourceManager:
     """
-    Unified data source manager with intelligent fallback and validation.
+    Unified data source manager with Unusual Whales as primary source.
     
     Features:
-    - Automatic fallback to backup sources
+    - Unusual Whales for options flow, chains, and market sentiment
+    - Automatic fallback to backup sources (Public.com, IEX, Alpaca)
     - Cross-validation between sources
     - Health monitoring and circuit breaking
     - Intelligent caching
     - Parallel fetching where possible
+    
+    NO LONGER USES: yfinance, Polygon (completely removed)
     """
     
     def __init__(
         self,
-        # Primary source
-        public_api_secret: Optional[str] = None,
+        # Primary source (NEW)
+        unusual_whales_api_key: Optional[str] = None,
         
         # Backup sources
+        public_api_secret: Optional[str] = None,
         alpaca_api_key: Optional[str] = None,
         alpaca_api_secret: Optional[str] = None,
         alpaca_paper: bool = True,
@@ -138,10 +150,11 @@ class DataSourceManager:
         cache_ttl_minutes: int = 5
     ):
         """
-        Initialize data source manager.
+        Initialize data source manager with Unusual Whales as primary.
         
         Args:
-            public_api_secret: Public.com API secret (primary)
+            unusual_whales_api_key: Unusual Whales API key (PRIMARY)
+            public_api_secret: Public.com API secret (backup)
             alpaca_api_key: Alpaca API key (backup)
             alpaca_api_secret: Alpaca API secret
             alpaca_paper: Use paper trading
@@ -161,16 +174,34 @@ class DataSourceManager:
         # Initialize status tracking
         self.status: Dict[DataSourceType, DataSourceStatus] = {}
         
-        # Initialize primary source (Public.com)
+        # Initialize PRIMARY source (Unusual Whales) - NEW!
+        self.unusual_whales = None
+        if unusual_whales_api_key:
+            try:
+                self.unusual_whales = UnusualWhalesAdapter(api_key=unusual_whales_api_key)
+                self.status[DataSourceType.UNUSUAL_WHALES] = DataSourceStatus(
+                    source_type=DataSourceType.UNUSUAL_WHALES,
+                    is_available=True
+                )
+                logger.info("✅ Unusual Whales adapter initialized (PRIMARY)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Unusual Whales: {e}")
+                self.status[DataSourceType.UNUSUAL_WHALES] = DataSourceStatus(
+                    source_type=DataSourceType.UNUSUAL_WHALES,
+                    is_available=False,
+                    last_error=str(e)
+                )
+        
+        # Initialize backup source (Public.com)
         self.public = None
         if public_api_secret:
             try:
-                self.public = PublicAdapter(api_secret=public_api_secret)
+                self.public = PublicTradingAdapter(secret_key=public_api_secret)
                 self.status[DataSourceType.PUBLIC] = DataSourceStatus(
                     source_type=DataSourceType.PUBLIC,
                     is_available=True
                 )
-                logger.info("✅ Public.com adapter initialized (primary)")
+                logger.info("✅ Public.com adapter initialized (backup)")
             except Exception as e:
                 logger.warning(f"Failed to initialize Public.com: {e}")
                 self.status[DataSourceType.PUBLIC] = DataSourceStatus(
@@ -178,29 +209,6 @@ class DataSourceManager:
                     is_available=False,
                     last_error=str(e)
                 )
-        
-        # Initialize backup source (Alpaca) - DISABLED: alpaca_adapter not in engines/inputs
-        self.alpaca = None
-        # TODO: Move alpaca_adapter to engines/inputs or use engines/execution/alpaca_executor
-        # if alpaca_api_key and alpaca_api_secret:
-        #     try:
-        #         self.alpaca = AlpacaAdapter(
-        #             api_key=alpaca_api_key,
-        #             api_secret=alpaca_api_secret,
-        #             paper=alpaca_paper
-        #         )
-        #         self.status[DataSourceType.ALPACA] = DataSourceStatus(
-        #             source_type=DataSourceType.ALPACA,
-        #             is_available=True
-        #         )
-        #         logger.info("✅ Alpaca adapter initialized (backup)")
-        #     except Exception as e:
-        #         logger.warning(f"Failed to initialize Alpaca: {e}")
-        #         self.status[DataSourceType.ALPACA] = DataSourceStatus(
-        #             source_type=DataSourceType.ALPACA,
-        #             is_available=False,
-        #             last_error=str(e)
-        #         )
         
         # Initialize backup source (IEX)
         self.iex = None
@@ -220,29 +228,7 @@ class DataSourceManager:
                     last_error=str(e)
                 )
         
-        # Initialize free sources (always available)
-        try:
-            self.yfinance = YFinanceAdapter()
-            self.status[DataSourceType.YFINANCE] = DataSourceStatus(
-                source_type=DataSourceType.YFINANCE,
-                is_available=True
-            )
-            logger.info("✅ yfinance adapter initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize yfinance: {e}")
-            self.yfinance = None
-        
-        try:
-            self.yahoo_options = YahooOptionsAdapter()
-            self.status[DataSourceType.YAHOO_OPTIONS] = DataSourceStatus(
-                source_type=DataSourceType.YAHOO_OPTIONS,
-                is_available=True
-            )
-            logger.info("✅ Yahoo Options adapter initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Yahoo Options: {e}")
-            self.yahoo_options = None
-        
+        # Initialize free sources
         try:
             self.dark_pool = DarkPoolAdapter()
             self.status[DataSourceType.DARK_POOL] = DataSourceStatus(
@@ -283,7 +269,7 @@ class DataSourceManager:
                     last_error=str(e)
                 )
         
-        # Initialize sentiment sources (requires credentials)
+        # Initialize sentiment sources
         self.stocktwits = None
         try:
             self.stocktwits = StockTwitsAdapter()
@@ -317,6 +303,7 @@ class DataSourceManager:
                 )
         
         logger.info(f"✅ DataSourceManager initialized with {len(self.status)} sources")
+        logger.info(f"🚀 PRIMARY DATA SOURCE: Unusual Whales")
     
     def get_source_status(self) -> pl.DataFrame:
         """Get status of all data sources."""
@@ -330,7 +317,7 @@ class DataSourceManager:
         """
         Fetch real-time quote with fallback.
         
-        Order: Public.com -> IEX -> Alpaca
+        Order: Unusual Whales -> Public.com -> IEX -> Alpaca
         
         Args:
             symbol: Stock symbol
@@ -338,14 +325,38 @@ class DataSourceManager:
         Returns:
             Dictionary with price data
         """
-        # Try primary source (Public.com)
+        # Try PRIMARY source (Unusual Whales)
+        if self.unusual_whales and self.status.get(DataSourceType.UNUSUAL_WHALES, DataSourceStatus(source_type=DataSourceType.UNUSUAL_WHALES, is_available=False)).is_healthy:
+            try:
+                overview = self.unusual_whales.get_ticker_overview(symbol)
+                if overview and 'data' in overview:
+                    data = overview['data']
+                    quote = {
+                        "last": data.get("price", data.get("close")),
+                        "bid": data.get("bid"),
+                        "ask": data.get("ask")
+                    }
+                    logger.info(f"✅ Quote from Unusual Whales: {symbol} = ${quote['last']}")
+                    return quote
+            except Exception as e:
+                logger.warning(f"Unusual Whales failed, trying backup: {e}")
+                if DataSourceType.UNUSUAL_WHALES in self.status:
+                    self.status[DataSourceType.UNUSUAL_WHALES].error_count += 1
+                    self.status[DataSourceType.UNUSUAL_WHALES].last_error = str(e)
+        
+        # Try backup source (Public.com)
         if self.public and self.status.get(DataSourceType.PUBLIC, DataSourceStatus(source_type=DataSourceType.PUBLIC, is_available=False)).is_healthy:
             try:
-                quote = self.public.fetch_quote(symbol)
-                logger.info(f"✅ Quote from Public.com: {symbol} = ${quote['last']}")
-                return quote
+                # Public.com requires account_id - get it first
+                account_id = self.public.account_id if hasattr(self.public, 'account_id') else None
+                if account_id:
+                    quotes = self.public.get_quotes(account_id, [{"symbol": symbol}])
+                    if symbol in quotes:
+                        quote = quotes[symbol]
+                        logger.info(f"✅ Quote from Public.com: {symbol} = ${quote['price']}")
+                        return {"last": quote['price'], "bid": quote.get('bid'), "ask": quote.get('ask')}
             except Exception as e:
-                logger.warning(f"Public.com failed, trying backup: {e}")
+                logger.warning(f"Public.com failed, trying IEX: {e}")
                 if DataSourceType.PUBLIC in self.status:
                     self.status[DataSourceType.PUBLIC].error_count += 1
                     self.status[DataSourceType.PUBLIC].last_error = str(e)
@@ -362,20 +373,10 @@ class DataSourceManager:
                 logger.info(f"✅ Quote from IEX: {symbol} = ${quote['last']}")
                 return quote
             except Exception as e:
-                logger.warning(f"IEX failed, trying Alpaca: {e}")
+                logger.warning(f"IEX failed: {e}")
                 if DataSourceType.IEX in self.status:
                     self.status[DataSourceType.IEX].error_count += 1
                     self.status[DataSourceType.IEX].last_error = str(e)
-        
-        # Try Alpaca as last resort
-        if self.alpaca and self.status.get(DataSourceType.ALPACA, DataSourceStatus(source_type=DataSourceType.ALPACA, is_available=False)).is_healthy:
-            try:
-                quote = self.alpaca.get_latest_quote(symbol)
-                logger.info(f"✅ Quote from Alpaca: {symbol} = ${quote['bid']}")
-                return quote
-            except Exception as e:
-                logger.error(f"All quote sources failed for {symbol}: {e}")
-                return None
         
         logger.error(f"No quote sources available for {symbol}")
         return None
@@ -383,36 +384,54 @@ class DataSourceManager:
     def fetch_ohlcv(
         self,
         symbol: str,
-        timeframe: str = "1m",
+        timeframe: str = "1d",
         limit: int = 100
     ) -> Optional[pl.DataFrame]:
         """
         Fetch OHLCV data with fallback.
         
-        Order: Public.com -> IEX -> Alpaca
+        Order: Unusual Whales -> Public.com -> IEX
         
         Args:
             symbol: Stock symbol
-            timeframe: Timeframe (1m, 5m, 1h, 1d)
+            timeframe: Timeframe (1d, 1h, etc.)
             limit: Number of bars
         
         Returns:
             Polars DataFrame with OHLCV data
         """
-        # Try Public.com first
+        # Try Unusual Whales first
+        if self.unusual_whales and self.status.get(DataSourceType.UNUSUAL_WHALES, DataSourceStatus(source_type=DataSourceType.UNUSUAL_WHALES, is_available=False)).is_healthy:
+            try:
+                # Use ticker historical endpoint
+                from datetime import datetime, timedelta
+                end_date = datetime.now().strftime("%Y-%m-%d")
+                start_date = (datetime.now() - timedelta(days=limit)).strftime("%Y-%m-%d")
+                
+                hist = self.unusual_whales.get_ticker_historical(symbol, start_date, end_date)
+                if hist and 'data' in hist and hist['data']:
+                    # Convert to polars DataFrame
+                    df = pl.DataFrame(hist['data'])
+                    if not df.is_empty():
+                        logger.info(f"✅ OHLCV from Unusual Whales: {symbol} ({len(df)} bars)")
+                        return df
+            except Exception as e:
+                logger.warning(f"Unusual Whales OHLCV failed: {e}")
+        
+        # Try Public.com
         if self.public and self.status.get(DataSourceType.PUBLIC, DataSourceStatus(source_type=DataSourceType.PUBLIC, is_available=False)).is_healthy:
             try:
-                # Map timeframe to period
-                if timeframe == "1d":
-                    period = "60d"
-                else:
-                    period = "7d"  # Max intraday
-                
-                df = self.public.fetch_ohlcv(symbol, period=period, interval=timeframe)
-                if not df.is_empty():
-                    df = df.tail(limit)
-                    logger.info(f"✅ OHLCV from Public.com: {symbol} ({len(df)} bars)")
-                    return df
+                account_id = self.public.account_id if hasattr(self.public, 'account_id') else None
+                if account_id:
+                    # Map timeframe to period
+                    period = "60d" if timeframe == "1d" else "7d"
+                    hist = self.public.get_history(account_id, symbol, period=period, interval=timeframe)
+                    if hist and 'history' in hist:
+                        df = pl.DataFrame(hist['history'])
+                        if not df.is_empty():
+                            df = df.tail(limit)
+                            logger.info(f"✅ OHLCV from Public.com: {symbol} ({len(df)} bars)")
+                            return df
             except Exception as e:
                 logger.warning(f"Public.com OHLCV failed: {e}")
         
@@ -420,22 +439,11 @@ class DataSourceManager:
         if self.iex and self.status.get(DataSourceType.IEX, DataSourceStatus(source_type=DataSourceType.IEX, is_available=False)).is_healthy:
             try:
                 df = self.iex.fetch_ohlcv(symbol, timeframe, limit)
-                if not df.is_empty():
+                if df and not df.is_empty():
                     logger.info(f"✅ OHLCV from IEX: {symbol} ({len(df)} bars)")
                     return df
             except Exception as e:
                 logger.warning(f"IEX OHLCV failed: {e}")
-        
-        # Try Alpaca
-        if self.alpaca and self.status.get(DataSourceType.ALPACA, DataSourceStatus(source_type=DataSourceType.ALPACA, is_available=False)).is_healthy:
-            try:
-                df = self.alpaca.get_bars(symbol, timeframe, limit)
-                if not df.is_empty():
-                    logger.info(f"✅ OHLCV from Alpaca: {symbol} ({len(df)} bars)")
-                    return df
-            except Exception as e:
-                logger.error(f"All OHLCV sources failed for {symbol}: {e}")
-                return None
         
         return None
     
@@ -448,6 +456,8 @@ class DataSourceManager:
     ) -> UnifiedMarketData:
         """
         Fetch all available data for a symbol in one call.
+        
+        NEW: Uses Unusual Whales as primary for options, flow, and sentiment.
         
         Args:
             symbol: Stock symbol
@@ -476,15 +486,15 @@ class DataSourceManager:
             data.volume = row.get("volume")
             data.data_sources_used.append("ohlcv")
         
-        # 2. Get regime data (VIX, SPX)
-        if self.public and include_macro:
+        # 2. Get market sentiment from Unusual Whales Market Tide (NEW)
+        if self.unusual_whales:
             try:
-                regime = self.public.fetch_market_regime_data()
-                data.vix = regime.get("vix")
-                data.spx = regime.get("spx")
-                data.data_sources_used.append("regime")
+                tide = self.unusual_whales.get_market_tide()
+                if tide and 'data' in tide:
+                    data.market_tide = tide['data']
+                    data.data_sources_used.append("unusual_whales_tide")
             except Exception as e:
-                logger.warning(f"Failed to fetch regime data: {e}")
+                logger.warning(f"Failed to fetch Market Tide: {e}")
         
         # 3. Get macro data
         if self.fred and include_macro:
@@ -497,16 +507,22 @@ class DataSourceManager:
             except Exception as e:
                 logger.warning(f"Failed to fetch macro data: {e}")
         
-        # 4. Get options chain
-        if self.yahoo_options and include_options:
+        # 4. Get options chain from Unusual Whales (NEW)
+        if self.unusual_whales and include_options:
             try:
-                chain = self.yahoo_options.fetch_options_chain(symbol)
-                if not chain.is_empty():
+                chain = self.unusual_whales.get_ticker_chain(symbol)
+                if chain and 'data' in chain and chain['data']:
                     data.options_chain_available = True
-                    data.num_options = len(chain)
-                    data.data_sources_used.append("options")
+                    data.num_options = len(chain['data'])
+                    data.data_sources_used.append("unusual_whales_options")
+                
+                # Also get options flow alerts
+                flow = self.unusual_whales.get_flow_alerts(ticker=symbol, limit=10)
+                if flow and 'data' in flow:
+                    data.options_flow_alerts = len(flow['data'])
+                    data.data_sources_used.append("unusual_whales_flow")
             except Exception as e:
-                logger.warning(f"Failed to fetch options: {e}")
+                logger.warning(f"Failed to fetch Unusual Whales options: {e}")
         
         # 5. Get sentiment
         if include_sentiment:
@@ -523,7 +539,7 @@ class DataSourceManager:
             if self.wsb and symbol in ["SPY", "QQQ", "TSLA", "AAPL", "NVDA"]:
                 try:
                     df_wsb = self.wsb.fetch_sentiment(limit=50, min_mentions=1)
-                    if not df_wsb.is_empty():
+                    if df_wsb and not df_wsb.is_empty():
                         symbol_row = df_wsb.filter(pl.col("symbol") == symbol)
                         if not symbol_row.is_empty():
                             row = symbol_row.row(0, named=True)
@@ -565,26 +581,24 @@ class DataSourceManager:
 if __name__ == "__main__":
     import os
     
-    # Initialize manager with credentials
+    # Initialize manager with Unusual Whales as PRIMARY
     manager = DataSourceManager(
-        # Primary (Public.com)
-        public_api_secret=os.getenv("PUBLIC_API_SECRET", "tVi7dG9UEyYtz3BY8Ab1N2BxEwxBDs9c"),
+        # PRIMARY: Unusual Whales
+        unusual_whales_api_key=os.getenv("UNUSUAL_WHALES_API_KEY", "8932cd23-72b3-4f74-9848-13f9103b9df5"),
         
-        # Backup (Alpaca) - optional
-        alpaca_api_key=os.getenv("ALPACA_API_KEY"),
-        alpaca_api_secret=os.getenv("ALPACA_API_SECRET"),
-        alpaca_paper=True,
+        # Backup: Public.com
+        public_api_secret=os.getenv("PUBLIC_API_SECRET"),
         
-        # Backup (IEX) - optional
+        # Backup: IEX
         iex_api_token=os.getenv("IEX_API_TOKEN"),
         
-        # Macro (FRED) - optional
+        # Macro: FRED
         fred_api_key=os.getenv("FRED_API_KEY"),
         
-        # Sentiment (Reddit) - optional
+        # Sentiment: Reddit
         reddit_client_id=os.getenv("REDDIT_CLIENT_ID"),
         reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-        reddit_user_agent="DataSourceManager/1.0",
+        reddit_user_agent="DataSourceManager/2.0",
         
         # Configuration
         enable_validation=True,
@@ -593,7 +607,7 @@ if __name__ == "__main__":
     
     # Check source status
     print("\n" + "="*60)
-    print("DATA SOURCE STATUS")
+    print("DATA SOURCE STATUS (Unusual Whales Primary)")
     print("="*60)
     
     df_status = manager.get_source_status()
@@ -601,7 +615,7 @@ if __name__ == "__main__":
     
     # Fetch unified data
     print("\n" + "="*60)
-    print("UNIFIED DATA FOR SPY")
+    print("UNIFIED DATA FOR SPY (Unusual Whales Primary)")
     print("="*60)
     
     data = manager.fetch_unified_data(
@@ -614,28 +628,12 @@ if __name__ == "__main__":
     print(f"\nSymbol: {data.symbol}")
     print(f"Timestamp: {data.timestamp}")
     print(f"\nOHLCV:")
-    print(f"  Open: ${data.open}")
-    print(f"  High: ${data.high}")
-    print(f"  Low: ${data.low}")
     print(f"  Close: ${data.close}")
     print(f"  Volume: {data.volume:,}")
-    print(f"\nRegime:")
-    print(f"  VIX: {data.vix}")
-    print(f"  SPX: {data.spx}")
-    print(f"\nMacro:")
-    print(f"  Fed Funds: {data.fed_funds_rate}")
-    print(f"  10Y Treasury: {data.treasury_10y}")
-    print(f"  Yield Curve: {data.yield_curve_slope}")
-    print(f"\nOptions:")
-    print(f"  Available: {data.options_chain_available}")
+    print(f"\nMarket Sentiment (Unusual Whales):")
+    print(f"  Market Tide: {data.market_tide}")
+    print(f"\nOptions (Unusual Whales):")
+    print(f"  Chain Available: {data.options_chain_available}")
     print(f"  Num Options: {data.num_options}")
-    print(f"\nSentiment:")
-    print(f"  StockTwits: {data.stocktwits_sentiment}")
-    print(f"  WSB: {data.wsb_sentiment} ({data.wsb_mentions} mentions)")
-    print(f"\nDark Pool:")
-    print(f"  Ratio: {data.dark_pool_ratio}")
-    print(f"  Pressure: {data.dark_pool_pressure}")
-    print(f"\nShort Interest:")
-    print(f"  Short Ratio: {data.short_volume_ratio}")
-    print(f"  Squeeze Pressure: {data.short_squeeze_pressure}")
+    print(f"  Flow Alerts: {data.options_flow_alerts}")
     print(f"\nData Sources Used: {', '.join(data.data_sources_used)}")

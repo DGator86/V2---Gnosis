@@ -8,9 +8,12 @@ additional indicators that aren't already implemented.
 Uses the `ta` library: https://github.com/bukosabino/ta
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from loguru import logger
 import polars as pl
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 try:
     import ta
@@ -18,6 +21,7 @@ try:
     TA_AVAILABLE = True
 except ImportError:
     TA_AVAILABLE = False
+    pd = None  # type: ignore
     logger.warning(
         "ta library not installed. Install with: pip install ta>=0.11.0"
     )
@@ -44,11 +48,11 @@ class TAIndicators:
             "volume", "volatility", "trend", "momentum", "others"
         ]
     
-    def _to_pandas(self, df: pl.DataFrame) -> pd.DataFrame:
+    def _to_pandas(self, df: pl.DataFrame) -> "pd.DataFrame":
         """Convert Polars to Pandas for ta library."""
         return df.to_pandas()
     
-    def _to_polars(self, df: pd.DataFrame) -> pl.DataFrame:
+    def _to_polars(self, df: "pd.DataFrame") -> pl.DataFrame:
         """Convert Pandas back to Polars."""
         return pl.from_pandas(df)
     

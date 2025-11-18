@@ -331,13 +331,13 @@ class TechnicalIndicators:
         high_diff = df["high"].diff()
         low_diff = -df["low"].diff()
         
-        plus_dm = pl.when(high_diff > low_diff)
-                    .then(high_diff.clip_min(0))
-                    .otherwise(pl.lit(0.0))
+        plus_dm = (pl.when(high_diff > low_diff)
+                   .then(high_diff.clip_min(0))
+                   .otherwise(pl.lit(0.0)))
         
-        minus_dm = pl.when(low_diff > high_diff)
-                     .then(low_diff.clip_min(0))
-                     .otherwise(pl.lit(0.0))
+        minus_dm = (pl.when(low_diff > high_diff)
+                    .then(low_diff.clip_min(0))
+                    .otherwise(pl.lit(0.0)))
         
         # Calculate TR (True Range) - reuse from ATR
         high_low = df["high"] - df["low"]
