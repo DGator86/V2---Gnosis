@@ -5,14 +5,13 @@ Orchestrates all data sources with intelligent fallback, validation,
 and caching strategies. Provides a single interface for all market data needs.
 
 Data Source Hierarchy:
-1. Primary: Alpaca (real-time, official)
+1. Primary: Public.com (real-time quotes, historical, options)
 2. Backup: IEX Cloud (validation)
-3. Historical: yfinance (free, historical)
-4. Options: Yahoo Options (free chains)
-5. Macro: FRED (economic data)
-6. Sentiment: StockTwits + WSB (social)
-7. Dark Pool: Dark Pool Adapter (institutional flow)
-8. Short Volume: FINRA (short interest)
+3. Fallback: Alpaca (real-time, official)
+4. Macro: FRED (economic data)
+5. Sentiment: StockTwits + WSB (social)
+6. Dark Pool: Dark Pool Adapter (institutional flow)
+7. Short Volume: FINRA (short interest)
 """
 
 from typing import Dict, List, Optional, Any
@@ -36,10 +35,9 @@ from engines.inputs.iex_adapter import IEXAdapter
 
 class DataSourceType(str, Enum):
     """Data source types."""
+    PUBLIC = "public"
     ALPACA = "alpaca"
     IEX = "iex"
-    YFINANCE = "yfinance"
-    YAHOO_OPTIONS = "yahoo_options"
     FRED = "fred"
     DARK_POOL = "dark_pool"
     SHORT_VOLUME = "short_volume"
@@ -117,12 +115,13 @@ class DataSourceManager:
     
     def __init__(
         self,
-        # Primary sources
+        # Primary source
+        public_api_secret: Optional[str] = None,
+        
+        # Backup sources
         alpaca_api_key: Optional[str] = None,
         alpaca_api_secret: Optional[str] = None,
         alpaca_paper: bool = True,
-        
-        # Backup sources
         iex_api_token: Optional[str] = None,
         
         # Free sources
@@ -142,7 +141,8 @@ class DataSourceManager:
         Initialize data source manager.
         
         Args:
-            alpaca_api_key: Alpaca API key (primary)
+            public_api_secret: Public.com API secret (primary)
+            alpaca_api_key: Alpaca API key (backup)
             alpaca_api_secret: Alpaca API secret
             alpaca_paper: Use paper trading
             iex_api_token: IEX Cloud token (backup)
@@ -161,7 +161,25 @@ class DataSourceManager:
         # Initialize status tracking
         self.status: Dict[DataSourceType, DataSourceStatus] = {}
         
-        # Initialize primary source (Alpaca) - DISABLED: alpaca_adapter not in engines/inputs
+        # Initialize primary source (Public.com)
+        self.public = None
+        if public_api_secret:
+            try:
+                self.public = PublicAdapter(api_secret=public_api_secret)
+                self.status[DataSourceType.PUBLIC] = DataSourceStatus(
+                    source_type=DataSourceType.PUBLIC,
+                    is_available=True
+                )
+                logger.info("✅ Public.com adapter initialized (primary)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Public.com: {e}")
+                self.status[DataSourceType.PUBLIC] = DataSourceStatus(
+                    source_type=DataSourceType.PUBLIC,
+                    is_available=False,
+                    last_error=str(e)
+                )
+        
+        # Initialize backup source (Alpaca) - DISABLED: alpaca_adapter not in engines/inputs
         self.alpaca = None
         # TODO: Move alpaca_adapter to engines/inputs or use engines/execution/alpaca_executor
         # if alpaca_api_key and alpaca_api_secret:
@@ -175,7 +193,7 @@ class DataSourceManager:
         #             source_type=DataSourceType.ALPACA,
         #             is_available=True
         #         )
-        #         logger.info("✅ Alpaca adapter initialized (primary)")
+        #         logger.info("✅ Alpaca adapter initialized (backup)")
         #     except Exception as e:
         #         logger.warning(f"Failed to initialize Alpaca: {e}")
         #         self.status[DataSourceType.ALPACA] = DataSourceStatus(
@@ -312,7 +330,7 @@ class DataSourceManager:
         """
         Fetch real-time quote with fallback.
         
-        Order: Alpaca -> IEX -> yfinance
+        Order: Public.com -> IEX -> Alpaca
         
         Args:
             symbol: Stock symbol
@@ -320,19 +338,20 @@ class DataSourceManager:
         Returns:
             Dictionary with price data
         """
-        # Try primary source (Alpaca)
-        if self.alpaca and self.status[DataSourceType.ALPACA].is_healthy:
+        # Try primary source (Public.com)
+        if self.public and self.status.get(DataSourceType.PUBLIC, DataSourceStatus(source_type=DataSourceType.PUBLIC, is_available=False)).is_healthy:
             try:
-                quote = self.alpaca.get_latest_quote(symbol)
-                logger.info(f"✅ Quote from Alpaca: {symbol} = ${quote['bid']}")
+                quote = self.public.fetch_quote(symbol)
+                logger.info(f"✅ Quote from Public.com: {symbol} = ${quote['last']}")
                 return quote
             except Exception as e:
-                logger.warning(f"Alpaca failed, trying backup: {e}")
-                self.status[DataSourceType.ALPACA].error_count += 1
-                self.status[DataSourceType.ALPACA].last_error = str(e)
+                logger.warning(f"Public.com failed, trying backup: {e}")
+                if DataSourceType.PUBLIC in self.status:
+                    self.status[DataSourceType.PUBLIC].error_count += 1
+                    self.status[DataSourceType.PUBLIC].last_error = str(e)
         
         # Try backup source (IEX)
-        if self.iex and self.status[DataSourceType.IEX].is_healthy:
+        if self.iex and self.status.get(DataSourceType.IEX, DataSourceStatus(source_type=DataSourceType.IEX, is_available=False)).is_healthy:
             try:
                 quote_obj = self.iex.fetch_quote(symbol)
                 quote = {
@@ -343,23 +362,16 @@ class DataSourceManager:
                 logger.info(f"✅ Quote from IEX: {symbol} = ${quote['last']}")
                 return quote
             except Exception as e:
-                logger.warning(f"IEX failed, trying yfinance: {e}")
-                self.status[DataSourceType.IEX].error_count += 1
-                self.status[DataSourceType.IEX].last_error = str(e)
+                logger.warning(f"IEX failed, trying Alpaca: {e}")
+                if DataSourceType.IEX in self.status:
+                    self.status[DataSourceType.IEX].error_count += 1
+                    self.status[DataSourceType.IEX].last_error = str(e)
         
-        # Try yfinance as last resort
-        if self.yfinance:
+        # Try Alpaca as last resort
+        if self.alpaca and self.status.get(DataSourceType.ALPACA, DataSourceStatus(source_type=DataSourceType.ALPACA, is_available=False)).is_healthy:
             try:
-                ticker = self.yfinance.get_ticker(symbol)
-                info = ticker.info
-                last_price = info.get("currentPrice") or info.get("regularMarketPrice", 0.0)
-                
-                quote = {
-                    "bid": info.get("bid", last_price),
-                    "ask": info.get("ask", last_price),
-                    "last": last_price
-                }
-                logger.info(f"✅ Quote from yfinance: {symbol} = ${quote['last']}")
+                quote = self.alpaca.get_latest_quote(symbol)
+                logger.info(f"✅ Quote from Alpaca: {symbol} = ${quote['bid']}")
                 return quote
             except Exception as e:
                 logger.error(f"All quote sources failed for {symbol}: {e}")
@@ -377,7 +389,7 @@ class DataSourceManager:
         """
         Fetch OHLCV data with fallback.
         
-        Order: Alpaca -> IEX -> yfinance
+        Order: Public.com -> IEX -> Alpaca
         
         Args:
             symbol: Stock symbol
@@ -387,18 +399,25 @@ class DataSourceManager:
         Returns:
             Polars DataFrame with OHLCV data
         """
-        # Try Alpaca first
-        if self.alpaca and self.status[DataSourceType.ALPACA].is_healthy:
+        # Try Public.com first
+        if self.public and self.status.get(DataSourceType.PUBLIC, DataSourceStatus(source_type=DataSourceType.PUBLIC, is_available=False)).is_healthy:
             try:
-                df = self.alpaca.get_bars(symbol, timeframe, limit)
+                # Map timeframe to period
+                if timeframe == "1d":
+                    period = "60d"
+                else:
+                    period = "7d"  # Max intraday
+                
+                df = self.public.fetch_ohlcv(symbol, period=period, interval=timeframe)
                 if not df.is_empty():
-                    logger.info(f"✅ OHLCV from Alpaca: {symbol} ({len(df)} bars)")
+                    df = df.tail(limit)
+                    logger.info(f"✅ OHLCV from Public.com: {symbol} ({len(df)} bars)")
                     return df
             except Exception as e:
-                logger.warning(f"Alpaca OHLCV failed: {e}")
+                logger.warning(f"Public.com OHLCV failed: {e}")
         
         # Try IEX
-        if self.iex and self.status[DataSourceType.IEX].is_healthy:
+        if self.iex and self.status.get(DataSourceType.IEX, DataSourceStatus(source_type=DataSourceType.IEX, is_available=False)).is_healthy:
             try:
                 df = self.iex.fetch_ohlcv(symbol, timeframe, limit)
                 if not df.is_empty():
@@ -407,34 +426,12 @@ class DataSourceManager:
             except Exception as e:
                 logger.warning(f"IEX OHLCV failed: {e}")
         
-        # Try yfinance
-        if self.yfinance:
+        # Try Alpaca
+        if self.alpaca and self.status.get(DataSourceType.ALPACA, DataSourceStatus(source_type=DataSourceType.ALPACA, is_available=False)).is_healthy:
             try:
-                # Map timeframe to yfinance interval
-                interval_map = {
-                    "1m": "1m",
-                    "5m": "5m",
-                    "15m": "15m",
-                    "1h": "1h",
-                    "1d": "1d"
-                }
-                interval = interval_map.get(timeframe, "1m")
-                
-                # Calculate period
-                if timeframe == "1d":
-                    period = "60d"
-                else:
-                    period = "7d"  # Max intraday
-                
-                df = self.yfinance.fetch_history(
-                    symbol=symbol,
-                    period=period,
-                    interval=interval
-                )
-                
+                df = self.alpaca.get_bars(symbol, timeframe, limit)
                 if not df.is_empty():
-                    df = df.tail(limit)
-                    logger.info(f"✅ OHLCV from yfinance: {symbol} ({len(df)} bars)")
+                    logger.info(f"✅ OHLCV from Alpaca: {symbol} ({len(df)} bars)")
                     return df
             except Exception as e:
                 logger.error(f"All OHLCV sources failed for {symbol}: {e}")
@@ -480,9 +477,9 @@ class DataSourceManager:
             data.data_sources_used.append("ohlcv")
         
         # 2. Get regime data (VIX, SPX)
-        if self.yfinance and include_macro:
+        if self.public and include_macro:
             try:
-                regime = self.yfinance.fetch_market_regime_data()
+                regime = self.public.fetch_market_regime_data()
                 data.vix = regime.get("vix")
                 data.spx = regime.get("spx")
                 data.data_sources_used.append("regime")
@@ -570,7 +567,10 @@ if __name__ == "__main__":
     
     # Initialize manager with credentials
     manager = DataSourceManager(
-        # Primary (Alpaca) - optional
+        # Primary (Public.com)
+        public_api_secret=os.getenv("PUBLIC_API_SECRET", "tVi7dG9UEyYtz3BY8Ab1N2BxEwxBDs9c"),
+        
+        # Backup (Alpaca) - optional
         alpaca_api_key=os.getenv("ALPACA_API_KEY"),
         alpaca_api_secret=os.getenv("ALPACA_API_SECRET"),
         alpaca_paper=True,
