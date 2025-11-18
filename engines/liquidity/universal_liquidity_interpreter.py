@@ -26,11 +26,12 @@ from dataclasses import dataclass
 import numpy as np
 from datetime import datetime
 from loguru import logger
+import polars as pl
 
 
 @dataclass
 class LiquidityState:
-    """Complete liquidity state of the market."""
+    """Complete liquidity state of the market (for stocks)."""
     
     # Impact metrics
     impact_cost: float  # Total cost to execute (bps)
@@ -62,6 +63,35 @@ class LiquidityState:
     # Regime classification
     regime: str  # high_liquidity, medium, low, illiquid
     stability: float  # Regime stability (0-1)
+    
+    # Metadata
+    timestamp: datetime
+    confidence: float  # Calculation confidence (0-1)
+
+
+@dataclass
+class OptionsLiquidityState:
+    """Complete liquidity state for an options strike."""
+    
+    # Basic strike info
+    strike: float
+    option_type: str  # "call" or "put"
+    expiry: str
+    
+    # Liquidity metrics
+    bid_ask_spread_pct: float  # (ask - bid) / mid * 100
+    open_interest: int  # Total contracts outstanding
+    daily_volume: int  # Today's volume
+    
+    # Liquidity scores (0-1, higher is better)
+    spread_score: float  # Based on spread tightness
+    oi_score: float  # Based on open interest depth
+    volume_score: float  # Based on trading activity
+    liquidity_score: float  # Overall liquidity quality (0-1)
+    
+    # Trading suitability
+    is_tradeable: bool  # Meets minimum liquidity thresholds
+    warning_flags: List[str]  # Liquidity warnings
     
     # Metadata
     timestamp: datetime
@@ -527,6 +557,278 @@ class UniversalLiquidityInterpreter:
         )
         
         return max(0.0, min(1.0, confidence))
+    
+    
+    # ========================================================================
+    # OPTIONS LIQUIDITY ANALYSIS
+    # ========================================================================
+    
+    def interpret_options_liquidity(
+        self,
+        options_chain: pl.DataFrame,
+        min_open_interest: int = 100,
+        max_spread_pct: float = 5.0,
+        min_volume: int = 50
+    ) -> pl.DataFrame:
+        """
+        Analyze liquidity of an entire options chain.
+        
+        Calculates liquidity metrics for each strike and filters
+        to only tradeable options.
+        
+        Args:
+            options_chain: Options chain DataFrame with columns:
+                - strike, option_type, expiry
+                - bid, ask, last_price
+                - open_interest, volume
+            min_open_interest: Minimum OI for tradeable options
+            max_spread_pct: Maximum spread % for tradeable options
+            min_volume: Minimum daily volume for tradeable options
+        
+        Returns:
+            Options chain with added liquidity metrics and filtering
+        """
+        logger.info("🔍 Analyzing options chain liquidity...")
+        
+        # Calculate spread percentage
+        chain_with_metrics = options_chain.with_columns([
+            # Spread percentage
+            (
+                ((pl.col('ask') - pl.col('bid')) / 
+                 ((pl.col('ask') + pl.col('bid')) / 2)) * 100
+            ).alias('spread_pct'),
+            
+            # Mid price
+            ((pl.col('ask') + pl.col('bid')) / 2).alias('mid_price')
+        ])
+        
+        # Calculate liquidity scores for each strike
+        chain_with_scores = chain_with_metrics.with_columns([
+            # Spread score (tighter = better)
+            self._calculate_spread_score_expr(max_spread_pct).alias('spread_score'),
+            
+            # Open interest score
+            self._calculate_oi_score_expr(min_open_interest).alias('oi_score'),
+            
+            # Volume score
+            self._calculate_volume_score_expr(min_volume).alias('volume_score')
+        ])
+        
+        # Calculate overall liquidity score (weighted average)
+        chain_with_scores = chain_with_scores.with_columns([
+            (
+                pl.col('spread_score') * 0.4 +
+                pl.col('oi_score') * 0.4 +
+                pl.col('volume_score') * 0.2
+            ).alias('liquidity_score')
+        ])
+        
+        # Mark tradeable options
+        chain_with_scores = chain_with_scores.with_columns([
+            (
+                (pl.col('open_interest') >= min_open_interest) &
+                (pl.col('spread_pct') <= max_spread_pct) &
+                (pl.col('volume') >= min_volume)
+            ).alias('is_tradeable')
+        ])
+        
+        # Log summary
+        total_options = len(chain_with_scores)
+        tradeable_options = chain_with_scores.filter(pl.col('is_tradeable')).shape[0]
+        avg_spread = chain_with_scores['spread_pct'].mean()
+        
+        logger.info(f"   Total options: {total_options}")
+        logger.info(f"   Tradeable options: {tradeable_options} ({tradeable_options/total_options*100:.1f}%)")
+        logger.info(f"   Average spread: {avg_spread:.2f}%")
+        
+        return chain_with_scores
+    
+    def filter_liquid_options(
+        self,
+        options_chain: pl.DataFrame,
+        min_liquidity_score: float = 0.6,
+        min_open_interest: int = 100,
+        max_spread_pct: float = 5.0,
+        min_volume: int = 50
+    ) -> pl.DataFrame:
+        """
+        Filter options chain to only liquid, tradeable options.
+        
+        This is the CRITICAL function to prevent trading illiquid strikes
+        with massive spreads.
+        
+        Args:
+            options_chain: Options chain DataFrame
+            min_liquidity_score: Minimum overall liquidity score (0-1)
+            min_open_interest: Minimum open interest
+            max_spread_pct: Maximum bid-ask spread %
+            min_volume: Minimum daily volume
+        
+        Returns:
+            Filtered DataFrame with only liquid options
+        """
+        logger.info("🚰 Filtering for liquid options...")
+        
+        # First, analyze liquidity
+        analyzed_chain = self.interpret_options_liquidity(
+            options_chain,
+            min_open_interest=min_open_interest,
+            max_spread_pct=max_spread_pct,
+            min_volume=min_volume
+        )
+        
+        # Filter for tradeable options with good liquidity scores
+        liquid_options = analyzed_chain.filter(
+            (pl.col('is_tradeable')) &
+            (pl.col('liquidity_score') >= min_liquidity_score)
+        )
+        
+        logger.info(f"   ✅ Filtered to {len(liquid_options)} liquid options")
+        
+        if len(liquid_options) == 0:
+            logger.warning("   ⚠️  NO LIQUID OPTIONS FOUND! Consider relaxing filters.")
+        
+        return liquid_options
+    
+    def calculate_strike_liquidity(
+        self,
+        strike: float,
+        option_type: str,
+        bid: float,
+        ask: float,
+        open_interest: int,
+        volume: int,
+        expiry: str
+    ) -> OptionsLiquidityState:
+        """
+        Calculate detailed liquidity state for a single option strike.
+        
+        Args:
+            strike: Strike price
+            option_type: "call" or "put"
+            bid: Bid price
+            ask: Ask price
+            open_interest: Open interest
+            volume: Daily volume
+            expiry: Expiry date
+        
+        Returns:
+            OptionsLiquidityState with detailed metrics
+        """
+        # Calculate mid price and spread
+        mid_price = (bid + ask) / 2 if bid > 0 and ask > 0 else 0
+        
+        if mid_price > 0:
+            spread_pct = ((ask - bid) / mid_price) * 100
+        else:
+            spread_pct = 100.0  # Mark as illiquid
+        
+        # Calculate individual scores
+        spread_score = self._calculate_spread_score(spread_pct, max_spread=5.0)
+        oi_score = self._calculate_oi_score(open_interest, min_oi=100)
+        volume_score = self._calculate_volume_score(volume, min_volume=50)
+        
+        # Overall liquidity score (weighted)
+        liquidity_score = (
+            spread_score * 0.4 +
+            oi_score * 0.4 +
+            volume_score * 0.2
+        )
+        
+        # Determine if tradeable
+        is_tradeable = (
+            spread_pct <= 5.0 and
+            open_interest >= 100 and
+            volume >= 50 and
+            liquidity_score >= 0.6
+        )
+        
+        # Generate warning flags
+        warnings = []
+        if spread_pct > 5.0:
+            warnings.append(f"Wide spread ({spread_pct:.1f}%)")
+        if open_interest < 100:
+            warnings.append(f"Low OI ({open_interest})")
+        if volume < 50:
+            warnings.append(f"Low volume ({volume})")
+        if liquidity_score < 0.6:
+            warnings.append(f"Poor liquidity score ({liquidity_score:.2f})")
+        
+        # Calculate confidence
+        confidence = min(1.0, (
+            (1.0 if bid > 0 and ask > 0 else 0.5) *
+            (1.0 if open_interest > 0 else 0.3) *
+            (1.0 if volume > 0 else 0.7)
+        ))
+        
+        return OptionsLiquidityState(
+            strike=strike,
+            option_type=option_type,
+            expiry=expiry,
+            bid_ask_spread_pct=spread_pct,
+            open_interest=open_interest,
+            daily_volume=volume,
+            spread_score=spread_score,
+            oi_score=oi_score,
+            volume_score=volume_score,
+            liquidity_score=liquidity_score,
+            is_tradeable=is_tradeable,
+            warning_flags=warnings,
+            timestamp=datetime.now(),
+            confidence=confidence
+        )
+    
+    def _calculate_spread_score(self, spread_pct: float, max_spread: float = 5.0) -> float:
+        """Calculate spread quality score (0-1, higher is better)."""
+        if spread_pct <= 0:
+            return 0.0
+        
+        # Linear decay from 1.0 at 0% to 0.0 at max_spread%
+        score = max(0.0, 1.0 - (spread_pct / max_spread))
+        return score
+    
+    def _calculate_spread_score_expr(self, max_spread: float = 5.0):
+        """Polars expression for spread score calculation."""
+        return pl.when(pl.col('spread_pct') <= 0).then(0.0).otherwise(
+            pl.when(pl.col('spread_pct') >= max_spread).then(0.0).otherwise(
+                1.0 - (pl.col('spread_pct') / max_spread)
+            )
+        )
+    
+    def _calculate_oi_score(self, oi: int, min_oi: int = 100) -> float:
+        """Calculate open interest quality score (0-1)."""
+        if oi <= 0:
+            return 0.0
+        
+        # Logarithmic scaling: score increases with OI but with diminishing returns
+        # Score of 0.5 at min_oi, 1.0 at 10x min_oi
+        score = min(1.0, np.log10(oi / min_oi + 1) / np.log10(11))
+        return score
+    
+    def _calculate_oi_score_expr(self, min_oi: int = 100):
+        """Polars expression for OI score calculation."""
+        return pl.when(pl.col('open_interest') <= 0).then(0.0).otherwise(
+            pl.when(pl.col('open_interest') >= min_oi * 10).then(1.0).otherwise(
+                (pl.col('open_interest') / (min_oi * 10)).log(base=10) / (10.0).log(base=10)
+            )
+        )
+    
+    def _calculate_volume_score(self, volume: int, min_volume: int = 50) -> float:
+        """Calculate volume quality score (0-1)."""
+        if volume <= 0:
+            return 0.0
+        
+        # Similar logarithmic scaling as OI
+        score = min(1.0, np.log10(volume / min_volume + 1) / np.log10(11))
+        return score
+    
+    def _calculate_volume_score_expr(self, min_volume: int = 50):
+        """Polars expression for volume score calculation."""
+        return pl.when(pl.col('volume') <= 0).then(0.0).otherwise(
+            pl.when(pl.col('volume') >= min_volume * 10).then(1.0).otherwise(
+                (pl.col('volume') / (min_volume * 10)).log(base=10) / (10.0).log(base=10)
+            )
+        )
 
 
 # ============================================================================
