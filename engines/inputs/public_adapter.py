@@ -73,16 +73,20 @@ class PublicAdapter:
         
         self.api_secret = api_secret
         self.timeout = timeout
+        self.access_token = None
+        self.token_expires_at = None
         
-        # Initialize HTTP client with authentication
+        # Initialize HTTP client (will set auth after getting access token)
         self.client = httpx.Client(
             base_url=self.BASE_URL,
             headers={
-                "Authorization": f"Bearer {api_secret}",
                 "Content-Type": "application/json",
             },
             timeout=timeout,
         )
+        
+        # Exchange secret for access token
+        self._get_access_token()
         
         logger.info("PublicAdapter initialized with API authentication")
     
@@ -90,6 +94,51 @@ class PublicAdapter:
         """Clean up HTTP client."""
         if hasattr(self, 'client'):
             self.client.close()
+    
+    def _get_access_token(self) -> str:
+        """Exchange API secret for access token.
+        
+        Returns:
+            Access token string
+        
+        Raises:
+            httpx.HTTPError: If token exchange fails
+        """
+        try:
+            # Check if we have a valid cached token
+            if self.access_token and self.token_expires_at:
+                if datetime.now() < self.token_expires_at:
+                    return self.access_token
+            
+            # Exchange secret for access token
+            response = self.client.post(
+                "/userapiauthservice/personal/access-tokens",
+                json={"secret_key": self.api_secret}
+            )
+            response.raise_for_status()
+            
+            # Parse response
+            data = response.json()
+            self.access_token = data.get("access_token")
+            expires_in = data.get("expires_in", 3600)  # Default 1 hour
+            
+            # Calculate expiration time (with 5 minute buffer)
+            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in - 300)
+            
+            # Update client headers with new token
+            self.client.headers["Authorization"] = f"Bearer {self.access_token}"
+            
+            logger.debug("Access token obtained successfully")
+            return self.access_token
+            
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to get access token: {e}")
+            raise
+    
+    def _ensure_authenticated(self):
+        """Ensure we have a valid access token, refresh if needed."""
+        if not self.access_token or (self.token_expires_at and datetime.now() >= self.token_expires_at):
+            self._get_access_token()
     
     def fetch_quotes(
         self,
@@ -123,6 +172,9 @@ class PublicAdapter:
             httpx.HTTPError: If API request fails
         """
         try:
+            # Ensure we have a valid access token
+            self._ensure_authenticated()
+            
             # Prepare request payload
             payload = {
                 "symbols": symbols,
