@@ -41,4 +41,5 @@ line-ending = "lf"
 [tool.pytest.ini_options]
 markers = [
     "regime_slow: Long-running regime-specific performance tests (deselect with '-m \"not regime_slow\"')",
+    "integration: mark a test as an integration test",
 ]
