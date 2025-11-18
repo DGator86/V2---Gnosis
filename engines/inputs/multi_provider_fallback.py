@@ -2,6 +2,12 @@
 Multi-Provider Fallback System
 ===============================
 
+⚠️ DEPRECATION WARNING: This module references Polygon and yfinance which have been
+removed from the project. Use DataSourceManager with Unusual Whales as the primary
+data source instead.
+
+This file is kept for reference but will not work without reinstalling removed dependencies.
+
 Advanced data source fallback with intelligent routing and validation.
 
 Key Features:
@@ -15,17 +21,23 @@ Key Features:
   - Rate limits
   - Cost optimization
 
-Provider Hierarchy:
-1. Polygon.io (primary) - Professional-grade, real-time
-2. Alpha Vantage (backup) - FREE, reliable historical
-3. yfinance (tertiary) - FREE fallback
+Provider Hierarchy (DEPRECATED):
+1. Polygon.io (primary) - REMOVED
+2. Alpha Vantage (backup) - Still available
+3. yfinance (tertiary) - REMOVED
 4. CCXT (crypto) - Crypto/FX markets
 5. Alpaca (execution) - Paper/live trading
 
-Installation:
+NEW RECOMMENDED APPROACH:
+Use DataSourceManager with Unusual Whales:
+    from engines.inputs.data_source_manager import DataSourceManager
+    manager = DataSourceManager(unusual_whales_api_key="your_key")
+    quote = manager.fetch_quote("SPY")
+
+Installation (OLD, deprecated):
     pip install polygon alpha-vantage
 
-Usage:
+Usage (OLD, deprecated):
     # Basic usage
     provider = MultiProviderFallback(
         polygon_api_key="YOUR_KEY",
