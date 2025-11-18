@@ -294,17 +294,23 @@ def scan_opportunities(
     # Build engines for scanner
     typer.echo("Building engines...")
     
-    # Use real Yahoo Finance adapters for live data
+    # Use real Public.com adapters for institutional-grade data
     try:
-        from engines.inputs.yfinance_adapter import create_yfinance_adapters
-        market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
-        typer.echo("✓ Using Yahoo Finance for real market data")
-    except ImportError:
-        # Fallback to static adapters if yfinance not available
-        options_adapter = StaticOptionsAdapter()
-        market_adapter = StaticMarketDataAdapter()
-        news_adapter = StaticNewsAdapter()
-        typer.echo("⚠️ Using static adapters (install yfinance for real data)")
+        from engines.inputs.public_adapter import create_public_adapters
+        market_adapter, options_adapter, news_adapter = create_public_adapters()
+        typer.echo("✓ Using Public.com for real-time market data")
+    except (ImportError, ValueError) as e:
+        # Fallback to Yahoo Finance if Public.com unavailable
+        try:
+            from engines.inputs.yfinance_adapter import create_yfinance_adapters
+            market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
+            typer.echo("✓ Using Yahoo Finance for real market data (Public.com unavailable)")
+        except ImportError:
+            # Final fallback to static adapters
+            options_adapter = StaticOptionsAdapter()
+            market_adapter = StaticMarketDataAdapter()
+            news_adapter = StaticNewsAdapter()
+            typer.echo("⚠️ Using static adapters (install real data providers)")
     
     hedge_engine = HedgeEngineV3(options_adapter, config.engines.hedge.model_dump())
     liquidity_engine = LiquidityEngineV1(market_adapter, config.engines.liquidity.model_dump())
@@ -471,14 +477,21 @@ def multi_symbol_loop(
     
     # Build scanner with real data adapters
     try:
-        from engines.inputs.yfinance_adapter import create_yfinance_adapters
-        market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
-        typer.echo("✓ Using Yahoo Finance for real market data")
-    except ImportError:
-        options_adapter = StaticOptionsAdapter()
-        market_adapter = StaticMarketDataAdapter()
-        news_adapter = StaticNewsAdapter()
-        typer.echo("⚠️ Using static adapters (install yfinance for real data)")
+        from engines.inputs.public_adapter import create_public_adapters
+        market_adapter, options_adapter, news_adapter = create_public_adapters()
+        typer.echo("✓ Using Public.com for real-time market data")
+    except (ImportError, ValueError) as e:
+        # Fallback to Yahoo Finance if Public.com unavailable
+        try:
+            from engines.inputs.yfinance_adapter import create_yfinance_adapters
+            market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
+            typer.echo("✓ Using Yahoo Finance for real market data (Public.com unavailable)")
+        except ImportError:
+            # Final fallback to static adapters
+            options_adapter = StaticOptionsAdapter()
+            market_adapter = StaticMarketDataAdapter()
+            news_adapter = StaticNewsAdapter()
+            typer.echo("⚠️ Using static adapters (install real data providers)")
     
     hedge_engine = HedgeEngineV3(options_adapter, config.engines.hedge.model_dump())
     liquidity_engine = LiquidityEngineV1(market_adapter, config.engines.liquidity.model_dump())

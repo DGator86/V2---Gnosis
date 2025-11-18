@@ -36,6 +36,27 @@ __all__ = [
     "YFinanceOptionsAdapter",
     "YFinanceNewsAdapter",
     "create_yfinance_adapters",
+    "PublicMarketAdapter",
+    "PublicOptionsAdapter",
+    "PublicNewsAdapter",
+    "create_public_adapters",
     "SampleOptionsGenerator",
     "generate_sample_chain_for_testing",
 ]
+
+# Public.com adapters (requires requests)
+try:
+    from .public_adapter import (
+        PublicMarketAdapter,
+        PublicOptionsAdapter,
+        PublicNewsAdapter,
+        create_public_adapters
+    )
+    __all__.extend([
+        "PublicMarketAdapter",
+        "PublicOptionsAdapter",
+        "PublicNewsAdapter",
+        "create_public_adapters",
+    ])
+except ImportError:
+    pass  # requests not installed
