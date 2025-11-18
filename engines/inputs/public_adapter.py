@@ -111,9 +111,13 @@ class PublicAdapter:
                     return self.access_token
             
             # Exchange secret for access token
+            # Note: validityInMinutes is optional (default: 60 minutes)
             response = self.client.post(
                 "/userapiauthservice/personal/access-tokens",
-                json={"secret": self.api_secret}
+                json={
+                    "secret": self.api_secret,
+                    "validityInMinutes": 60  # Request 60-minute token
+                }
             )
             
             # Log response for debugging
@@ -122,13 +126,16 @@ class PublicAdapter:
             
             response.raise_for_status()
             
-            # Parse response
+            # Parse response (Public.com uses camelCase: accessToken)
             data = response.json()
-            self.access_token = data.get("access_token")
-            expires_in = data.get("expires_in", 3600)  # Default 1 hour
+            self.access_token = data.get("accessToken")
             
-            # Calculate expiration time (with 5 minute buffer)
-            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in - 300)
+            if not self.access_token:
+                raise ValueError(f"No accessToken in response: {data}")
+            
+            # Calculate expiration time (60 minutes with 5 minute buffer)
+            validity_minutes = 60
+            self.token_expires_at = datetime.now() + timedelta(minutes=validity_minutes - 5)
             
             # Update client headers with new token
             self.client.headers["Authorization"] = f"Bearer {self.access_token}"
