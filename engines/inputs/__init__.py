@@ -5,6 +5,7 @@ from .options_chain_adapter import OptionsChainAdapter
 from .stub_adapters import StaticMarketDataAdapter, StaticNewsAdapter, StaticOptionsAdapter
 from .public_trading_adapter import PublicTradingAdapter, create_adapter
 from .sample_options_generator import SampleOptionsGenerator, generate_sample_chain_for_testing
+from .unusual_whales_adapter import UnusualWhalesAdapter
 
 __all__ = [
     "MarketDataAdapter",
@@ -17,4 +18,5 @@ __all__ = [
     "create_adapter",
     "SampleOptionsGenerator",
     "generate_sample_chain_for_testing",
+    "UnusualWhalesAdapter",
 ]
