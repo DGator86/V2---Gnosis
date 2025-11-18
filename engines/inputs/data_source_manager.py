@@ -34,6 +34,15 @@ from engines.inputs.stocktwits_adapter import StockTwitsAdapter
 from engines.inputs.wsb_sentiment_adapter import WSBSentimentAdapter
 from engines.inputs.iex_adapter import IEXAdapter
 
+# Import Alpaca broker adapter (provides real-time quotes)
+try:
+    from execution.broker_adapters.alpaca_adapter import AlpacaBrokerAdapter
+    from execution.broker_adapters.base import BrokerConnectionError
+    ALPACA_AVAILABLE = True
+except ImportError:
+    ALPACA_AVAILABLE = False
+    logger.warning("Alpaca broker adapter not available. Install with: pip install alpaca-py")
+
 
 class DataSourceType(str, Enum):
     """Data source types."""
@@ -228,6 +237,29 @@ class DataSourceManager:
                     last_error=str(e)
                 )
         
+        # Initialize Alpaca broker adapter (real-time quotes + execution)
+        self.alpaca = None
+        if alpaca_api_key and alpaca_api_secret and ALPACA_AVAILABLE:
+            try:
+                self.alpaca = AlpacaBrokerAdapter(
+                    api_key=alpaca_api_key,
+                    secret_key=alpaca_api_secret,
+                    paper=alpaca_paper
+                )
+                self.status[DataSourceType.ALPACA] = DataSourceStatus(
+                    source_type=DataSourceType.ALPACA,
+                    is_available=True
+                )
+                mode = "PAPER" if alpaca_paper else "LIVE"
+                logger.info(f"✅ Alpaca broker adapter initialized ({mode} mode)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Alpaca: {e}")
+                self.status[DataSourceType.ALPACA] = DataSourceStatus(
+                    source_type=DataSourceType.ALPACA,
+                    is_available=False,
+                    last_error=str(e)
+                )
+        
         # Initialize free sources
         try:
             self.dark_pool = DarkPoolAdapter()
@@ -373,12 +405,30 @@ class DataSourceManager:
                 logger.info(f"✅ Quote from IEX: {symbol} = ${quote['last']}")
                 return quote
             except Exception as e:
-                logger.warning(f"IEX failed: {e}")
+                logger.warning(f"IEX failed, trying Alpaca: {e}")
                 if DataSourceType.IEX in self.status:
                     self.status[DataSourceType.IEX].error_count += 1
                     self.status[DataSourceType.IEX].last_error = str(e)
         
-        logger.error(f"No quote sources available for {symbol}")
+        # Try final fallback (Alpaca - real-time, reliable)
+        if self.alpaca and self.status.get(DataSourceType.ALPACA, DataSourceStatus(source_type=DataSourceType.ALPACA, is_available=False)).is_healthy:
+            try:
+                quote_obj = self.alpaca.get_quote(symbol)
+                quote = {
+                    "bid": quote_obj.bid,
+                    "ask": quote_obj.ask,
+                    "last": quote_obj.last,
+                    "mid": quote_obj.mid
+                }
+                logger.info(f"✅ Quote from Alpaca: {symbol} = ${quote['last']}")
+                return quote
+            except Exception as e:
+                logger.warning(f"Alpaca failed: {e}")
+                if DataSourceType.ALPACA in self.status:
+                    self.status[DataSourceType.ALPACA].error_count += 1
+                    self.status[DataSourceType.ALPACA].last_error = str(e)
+        
+        logger.error(f"❌ All quote sources failed for {symbol}")
         return None
     
     def fetch_ohlcv(
