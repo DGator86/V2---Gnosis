@@ -28,6 +28,7 @@ from loguru import logger
 # Super Gnosis v3.0 Engines
 from engines.inputs.yahoo_options_adapter import YahooOptionsAdapter
 from engines.inputs.yfinance_adapter import YFinanceAdapter
+from engines.inputs.dix_gex_adapter import DIXGEXAdapter
 from engines.hedge.universal_energy_interpreter import (
     UniversalEnergyInterpreter,
     GreekExposure,
@@ -54,6 +55,7 @@ class OptionsValidationWorkflow:
         # Data sources
         self.options_adapter = YahooOptionsAdapter()  # FREE options data
         self.stock_adapter = YFinanceAdapter()        # FREE stock data
+        self.dix_gex_adapter = DIXGEXAdapter()        # DIX/GEX market sentiment
         
         # DHPE Engine
         self.energy_engine = UniversalEnergyInterpreter(
@@ -64,7 +66,7 @@ class OptionsValidationWorkflow:
         # Backtest Engine
         self.backtest_engine = UniversalBacktestEngine()
         
-        # Liquidity Engine (NEW - filters illiquid options)
+        # Liquidity Engine (filters illiquid options)
         self.liquidity_engine = UniversalLiquidityInterpreter(
             impact_scaling=1.0,
             slippage_scaling=1.0
@@ -126,6 +128,83 @@ class OptionsValidationWorkflow:
             logger.info(f"   ✅ Filtered to {len(options_chain)} liquid options")
         
         return options_chain
+    
+    def fetch_dix_gex_context(
+        self,
+        lookback_days: int = 30
+    ) -> Dict[str, any]:
+        """
+        Fetch DIX/GEX market sentiment data.
+        
+        DIX (Dark Index):
+        - Measures institutional dark pool buying pressure
+        - Higher DIX = Institutions accumulating (bullish)
+        - Lower DIX = Institutions distributing (bearish)
+        
+        GEX (Gamma Exposure):
+        - Measures net gamma from options market makers
+        - Positive GEX = Low volatility, range-bound
+        - Negative GEX = High volatility, explosive moves
+        
+        Args:
+            lookback_days: Days of historical data to fetch
+        
+        Returns:
+            Dict with current DIX/GEX values and interpretation
+        """
+        logger.info(f"📊 Fetching DIX/GEX market sentiment...")
+        
+        try:
+            # Fetch DIX/GEX data
+            df = self.dix_gex_adapter.fetch_dix_gex(lookback_days=lookback_days)
+            
+            if len(df) == 0:
+                logger.warning("   ⚠️  No DIX/GEX data available")
+                return {
+                    'dix': None,
+                    'gex': None,
+                    'interpretations': {},
+                    'data_available': False
+                }
+            
+            # Get current values
+            current_dix = df['dix'][-1] if 'dix' in df.columns else None
+            current_gex = df['gex'][-1] if 'gex' in df.columns else None
+            
+            # Get interpretations
+            if current_dix is not None and current_gex is not None:
+                interpretations = self.dix_gex_adapter.interpret_dix_gex(
+                    current_dix,
+                    current_gex
+                )
+            else:
+                interpretations = {}
+            
+            logger.info(f"   Current DIX: {current_dix:.3f if current_dix else 'N/A'}")
+            logger.info(f"   Current GEX: ${current_gex:.2f}B" if current_gex else "   Current GEX: N/A")
+            
+            if interpretations:
+                logger.info(f"   Signal: {interpretations.get('combined', 'Unknown')}")
+            
+            return {
+                'dix': current_dix,
+                'gex': current_gex,
+                'dix_avg': df['dix'].mean() if 'dix' in df.columns else None,
+                'gex_avg': df['gex'].mean() if 'gex' in df.columns else None,
+                'interpretations': interpretations,
+                'historical_data': df,
+                'data_available': True,
+                'source': df['source'][0] if 'source' in df.columns else 'unknown'
+            }
+            
+        except Exception as e:
+            logger.error(f"   Failed to fetch DIX/GEX: {e}")
+            return {
+                'dix': None,
+                'gex': None,
+                'interpretations': {},
+                'data_available': False
+            }
     
     
     # ========================================================================
@@ -639,6 +718,21 @@ def run_complete_workflow():
     # Get current stock price and VIX
     spot_price = 450.0  # Placeholder - fetch from market
     vix = 15.0  # Placeholder - fetch from VIX ticker
+    
+    # STEP 1.5: Fetch DIX/GEX market sentiment (NEW)
+    logger.info("\n" + "="*60)
+    logger.info("STEP 1.5: FETCH DIX/GEX MARKET SENTIMENT")
+    logger.info("="*60)
+    
+    dix_gex_context = workflow.fetch_dix_gex_context(lookback_days=30)
+    
+    if dix_gex_context['data_available']:
+        logger.info(f"\n📊 MARKET SENTIMENT:")
+        logger.info(f"   DIX: {dix_gex_context['dix']:.3f}")
+        logger.info(f"   GEX: ${dix_gex_context['gex']:.2f}B")
+        logger.info(f"   Signal: {dix_gex_context['interpretations'].get('combined', 'Unknown')}")
+    else:
+        logger.warning("\n⚠️  DIX/GEX data unavailable, proceeding without market sentiment")
     
     # STEP 2: Calculate energy state (DHPE)
     logger.info("\n" + "="*60)
