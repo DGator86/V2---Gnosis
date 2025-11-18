@@ -21,10 +21,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[test]
+          pip install greekcalc pyarrow pytest pytest-cov pytest-asyncio
 
-      - name: Install package
-        run: pip install -e .
-
-      - name: Run pytest
-        run: pytest
+      - name: Run tests
+        run: |
+          pytest -vv --cov=engines --cov=ml --cov=strategies
