@@ -293,9 +293,18 @@ def scan_opportunities(
     
     # Build engines for scanner
     typer.echo("Building engines...")
-    options_adapter = StaticOptionsAdapter()
-    market_adapter = StaticMarketDataAdapter()
-    news_adapter = StaticNewsAdapter()
+    
+    # Use real Yahoo Finance adapters for live data
+    try:
+        from engines.inputs.yfinance_adapter import create_yfinance_adapters
+        market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
+        typer.echo("✓ Using Yahoo Finance for real market data")
+    except ImportError:
+        # Fallback to static adapters if yfinance not available
+        options_adapter = StaticOptionsAdapter()
+        market_adapter = StaticMarketDataAdapter()
+        news_adapter = StaticNewsAdapter()
+        typer.echo("⚠️ Using static adapters (install yfinance for real data)")
     
     hedge_engine = HedgeEngineV3(options_adapter, config.engines.hedge.model_dump())
     liquidity_engine = LiquidityEngineV1(market_adapter, config.engines.liquidity.model_dump())
@@ -460,10 +469,16 @@ def multi_symbol_loop(
     typer.echo(f"   Press Ctrl+C to stop")
     typer.echo("="*80 + "\n")
     
-    # Build scanner
-    options_adapter = StaticOptionsAdapter()
-    market_adapter = StaticMarketDataAdapter()
-    news_adapter = StaticNewsAdapter()
+    # Build scanner with real data adapters
+    try:
+        from engines.inputs.yfinance_adapter import create_yfinance_adapters
+        market_adapter, options_adapter, news_adapter = create_yfinance_adapters()
+        typer.echo("✓ Using Yahoo Finance for real market data")
+    except ImportError:
+        options_adapter = StaticOptionsAdapter()
+        market_adapter = StaticMarketDataAdapter()
+        news_adapter = StaticNewsAdapter()
+        typer.echo("⚠️ Using static adapters (install yfinance for real data)")
     
     hedge_engine = HedgeEngineV3(options_adapter, config.engines.hedge.model_dump())
     liquidity_engine = LiquidityEngineV1(market_adapter, config.engines.liquidity.model_dump())
