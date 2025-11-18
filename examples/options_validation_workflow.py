@@ -34,6 +34,7 @@ from engines.hedge.universal_energy_interpreter import (
     EnergyState
 )
 from engines.backtest.universal_backtest_engine import UniversalBacktestEngine
+from engines.liquidity.universal_liquidity_interpreter import UniversalLiquidityInterpreter
 
 
 class OptionsValidationWorkflow:
@@ -63,6 +64,12 @@ class OptionsValidationWorkflow:
         # Backtest Engine
         self.backtest_engine = UniversalBacktestEngine()
         
+        # Liquidity Engine (NEW - filters illiquid options)
+        self.liquidity_engine = UniversalLiquidityInterpreter(
+            impact_scaling=1.0,
+            slippage_scaling=1.0
+        )
+        
         logger.info("✅ Options Validation Workflow initialized")
     
     
@@ -73,17 +80,27 @@ class OptionsValidationWorkflow:
     def fetch_options_chain(
         self,
         symbol: str,
-        days_to_expiry: int = 30
+        days_to_expiry: int = 30,
+        filter_liquid: bool = True,
+        min_liquidity_score: float = 0.6,
+        min_open_interest: int = 100,
+        max_spread_pct: float = 5.0,
+        min_volume: int = 50
     ) -> pl.DataFrame:
         """
-        Fetch options chain with Greeks.
+        Fetch options chain with Greeks and liquidity filtering.
         
         Args:
             symbol: Stock symbol (e.g., "SPY", "AAPL")
             days_to_expiry: Target days to expiration
+            filter_liquid: If True, filter to only liquid options
+            min_liquidity_score: Minimum liquidity score (0-1)
+            min_open_interest: Minimum open interest
+            max_spread_pct: Maximum bid-ask spread %
+            min_volume: Minimum daily volume
         
         Returns:
-            DataFrame with strikes, Greeks, OI
+            DataFrame with strikes, Greeks, OI, and liquidity metrics
         """
         logger.info(f"📊 Fetching options chain for {symbol} (~{days_to_expiry} DTE)")
         
@@ -95,6 +112,18 @@ class OptionsValidationWorkflow:
         )
         
         logger.info(f"   Retrieved {len(options_chain)} option contracts")
+        
+        # Apply liquidity filtering (CRITICAL - prevents illiquid trades)
+        if filter_liquid:
+            logger.info(f"   🔍 Applying liquidity filters...")
+            options_chain = self.liquidity_engine.filter_liquid_options(
+                options_chain,
+                min_liquidity_score=min_liquidity_score,
+                min_open_interest=min_open_interest,
+                max_spread_pct=max_spread_pct,
+                min_volume=min_volume
+            )
+            logger.info(f"   ✅ Filtered to {len(options_chain)} liquid options")
         
         return options_chain
     
@@ -372,11 +401,14 @@ class OptionsValidationWorkflow:
         - Expiration dates
         - Position sizes
         
+        NOTE: options_chain should already be filtered for liquidity
+        via fetch_options_chain() with filter_liquid=True
+        
         Args:
             symbol: Stock symbol
             energy_state: Calculated energy state
             price_targets: Support/resistance levels
-            options_chain: Current options chain
+            options_chain: Current options chain (liquidity filtered)
             risk_capital: Capital to risk per trade
         
         Returns:
@@ -384,8 +416,18 @@ class OptionsValidationWorkflow:
         """
         logger.info(f"💰 Generating options trade recommendations")
         
+        # Verify options chain has liquidity metrics
+        if 'liquidity_score' not in options_chain.columns:
+            logger.warning("⚠️  Options chain missing liquidity metrics! Re-filtering...")
+            options_chain = self.liquidity_engine.interpret_options_liquidity(options_chain)
+        
         trades = []
         current_price = price_targets['current_price']
+        
+        # Check if we have any liquid options to trade
+        if len(options_chain) == 0:
+            logger.warning("⚠️  NO LIQUID OPTIONS AVAILABLE! Cannot generate trades.")
+            return trades
         
         # Strategy 1: Directional play based on energy asymmetry
         if abs(energy_state.energy_asymmetry) > 0.1:  # Significant directional bias
@@ -393,74 +435,129 @@ class OptionsValidationWorkflow:
             if energy_state.energy_asymmetry > 0:
                 # Bullish: Buy calls
                 target_strike = price_targets['resistance_1']
-                trade = {
-                    'strategy': 'Long Call',
-                    'direction': 'BULLISH',
-                    'reasoning': f'Energy asymmetry {energy_state.energy_asymmetry:.2f} suggests upward move easier',
-                    'action': 'BUY TO OPEN',
-                    'option_type': 'CALL',
-                    'strike': target_strike,
-                    'expiry_days': 30,
-                    'contracts': int(risk_capital / 100),  # Simplified sizing
-                    'max_risk': risk_capital,
-                    'target_price': target_strike,
-                    'stop_loss': current_price * 0.98
-                }
-                trades.append(trade)
                 
-                logger.info(f"   💚 BULLISH TRADE:")
-                logger.info(f"      Buy {trade['contracts']} x {symbol} ${trade['strike']:.0f} Calls")
-                logger.info(f"      Expiry: ~{trade['expiry_days']} days")
-                logger.info(f"      Target: ${trade['target_price']:.2f}")
+                # Find liquid call near target strike
+                liquid_calls = options_chain.filter(
+                    (pl.col('option_type') == 'call') &
+                    (pl.col('strike') >= target_strike * 0.98) &
+                    (pl.col('strike') <= target_strike * 1.02)
+                ).sort('liquidity_score', descending=True)
+                
+                if len(liquid_calls) > 0:
+                    best_call = liquid_calls[0]
+                    trade = {
+                        'strategy': 'Long Call',
+                        'direction': 'BULLISH',
+                        'reasoning': f'Energy asymmetry {energy_state.energy_asymmetry:.2f} suggests upward move easier',
+                        'action': 'BUY TO OPEN',
+                        'option_type': 'CALL',
+                        'strike': best_call['strike'][0],
+                        'bid': best_call['bid'][0],
+                        'ask': best_call['ask'][0],
+                        'spread_pct': best_call['spread_pct'][0],
+                        'liquidity_score': best_call['liquidity_score'][0],
+                        'open_interest': best_call['open_interest'][0],
+                        'expiry_days': 30,
+                        'contracts': int(risk_capital / 100),  # Simplified sizing
+                        'max_risk': risk_capital,
+                        'target_price': target_strike,
+                        'stop_loss': current_price * 0.98
+                    }
+                    trades.append(trade)
+                    
+                    logger.info(f"   💚 BULLISH TRADE:")
+                    logger.info(f"      Buy {trade['contracts']} x {symbol} ${trade['strike']:.0f} Calls")
+                    logger.info(f"      Bid/Ask: ${trade['bid']:.2f}/${trade['ask']:.2f} (spread: {trade['spread_pct']:.1f}%)")
+                    logger.info(f"      Liquidity Score: {trade['liquidity_score']:.2f}")
+                    logger.info(f"      Open Interest: {trade['open_interest']:,}")
+                    logger.info(f"      Target: ${trade['target_price']:.2f}")
+                else:
+                    logger.warning(f"   ⚠️  No liquid calls found near ${target_strike:.0f}")
                 
             else:
                 # Bearish: Buy puts
                 target_strike = price_targets['support_1']
-                trade = {
-                    'strategy': 'Long Put',
-                    'direction': 'BEARISH',
-                    'reasoning': f'Energy asymmetry {energy_state.energy_asymmetry:.2f} suggests downward move easier',
-                    'action': 'BUY TO OPEN',
-                    'option_type': 'PUT',
-                    'strike': target_strike,
-                    'expiry_days': 30,
-                    'contracts': int(risk_capital / 100),
-                    'max_risk': risk_capital,
-                    'target_price': target_strike,
-                    'stop_loss': current_price * 1.02
-                }
-                trades.append(trade)
                 
-                logger.info(f"   ❤️ BEARISH TRADE:")
-                logger.info(f"      Buy {trade['contracts']} x {symbol} ${trade['strike']:.0f} Puts")
-                logger.info(f"      Expiry: ~{trade['expiry_days']} days")
-                logger.info(f"      Target: ${trade['target_price']:.2f}")
+                # Find liquid put near target strike
+                liquid_puts = options_chain.filter(
+                    (pl.col('option_type') == 'put') &
+                    (pl.col('strike') >= target_strike * 0.98) &
+                    (pl.col('strike') <= target_strike * 1.02)
+                ).sort('liquidity_score', descending=True)
+                
+                if len(liquid_puts) > 0:
+                    best_put = liquid_puts[0]
+                    trade = {
+                        'strategy': 'Long Put',
+                        'direction': 'BEARISH',
+                        'reasoning': f'Energy asymmetry {energy_state.energy_asymmetry:.2f} suggests downward move easier',
+                        'action': 'BUY TO OPEN',
+                        'option_type': 'PUT',
+                        'strike': best_put['strike'][0],
+                        'bid': best_put['bid'][0],
+                        'ask': best_put['ask'][0],
+                        'spread_pct': best_put['spread_pct'][0],
+                        'liquidity_score': best_put['liquidity_score'][0],
+                        'open_interest': best_put['open_interest'][0],
+                        'expiry_days': 30,
+                        'contracts': int(risk_capital / 100),
+                        'max_risk': risk_capital,
+                        'target_price': target_strike,
+                        'stop_loss': current_price * 1.02
+                    }
+                    trades.append(trade)
+                    
+                    logger.info(f"   ❤️ BEARISH TRADE:")
+                    logger.info(f"      Buy {trade['contracts']} x {symbol} ${trade['strike']:.0f} Puts")
+                    logger.info(f"      Bid/Ask: ${trade['bid']:.2f}/${trade['ask']:.2f} (spread: {trade['spread_pct']:.1f}%)")
+                    logger.info(f"      Liquidity Score: {trade['liquidity_score']:.2f}")
+                    logger.info(f"      Open Interest: {trade['open_interest']:,}")
+                    logger.info(f"      Target: ${trade['target_price']:.2f}")
+                else:
+                    logger.warning(f"   ⚠️  No liquid puts found near ${target_strike:.0f}")
         
         # Strategy 2: Sell premium at high-energy zones (resistance)
         if energy_state.regime in ['elastic', 'high_energy']:
             # High energy = strong resistance, sell OTM calls
             resistance_strike = price_targets['resistance_2']
-            trade = {
-                'strategy': 'Short Call (Covered)',
-                'direction': 'NEUTRAL_BEARISH',
-                'reasoning': f'High energy at ${resistance_strike:.2f} suggests strong resistance',
-                'action': 'SELL TO OPEN',
-                'option_type': 'CALL',
-                'strike': resistance_strike,
-                'expiry_days': 15,  # Shorter for premium collection
-                'contracts': 1,
-                'max_risk': 'Unlimited (use with stock)',
-                'target_price': resistance_strike,
-                'management': 'Close at 50% profit or if stock approaches strike'
-            }
-            trades.append(trade)
             
-            logger.info(f"   🟡 PREMIUM COLLECTION:")
-            logger.info(f"      Sell {trade['contracts']} x {symbol} ${trade['strike']:.0f} Calls")
-            logger.info(f"      Reason: Strong resistance at high-energy zone")
+            # Find liquid call near resistance
+            liquid_calls = options_chain.filter(
+                (pl.col('option_type') == 'call') &
+                (pl.col('strike') >= resistance_strike * 0.98) &
+                (pl.col('strike') <= resistance_strike * 1.02)
+            ).sort('liquidity_score', descending=True)
+            
+            if len(liquid_calls) > 0:
+                best_call = liquid_calls[0]
+                trade = {
+                    'strategy': 'Short Call (Covered)',
+                    'direction': 'NEUTRAL_BEARISH',
+                    'reasoning': f'High energy at ${resistance_strike:.2f} suggests strong resistance',
+                    'action': 'SELL TO OPEN',
+                    'option_type': 'CALL',
+                    'strike': best_call['strike'][0],
+                    'bid': best_call['bid'][0],
+                    'ask': best_call['ask'][0],
+                    'spread_pct': best_call['spread_pct'][0],
+                    'liquidity_score': best_call['liquidity_score'][0],
+                    'open_interest': best_call['open_interest'][0],
+                    'expiry_days': 15,  # Shorter for premium collection
+                    'contracts': 1,
+                    'max_risk': 'Unlimited (use with stock)',
+                    'target_price': resistance_strike,
+                    'management': 'Close at 50% profit or if stock approaches strike'
+                }
+                trades.append(trade)
+                
+                logger.info(f"   🟡 PREMIUM COLLECTION:")
+                logger.info(f"      Sell {trade['contracts']} x {symbol} ${trade['strike']:.0f} Calls")
+                logger.info(f"      Bid/Ask: ${trade['bid']:.2f}/${trade['ask']:.2f} (spread: {trade['spread_pct']:.1f}%)")
+                logger.info(f"      Liquidity Score: {trade['liquidity_score']:.2f}")
+                logger.info(f"      Reason: Strong resistance at high-energy zone")
         
         if len(trades) == 0:
-            logger.info(f"   ⚪ NO TRADES: Insufficient edge (neutral energy state)")
+            logger.info(f"   ⚪ NO TRADES: Insufficient edge or no liquid options available")
         
         return trades
     
