@@ -1,93 +1,152 @@
 """
-Yahoo Finance Data Adapter for Real Market Data
+Public.com API Adapter for Real-Time Market Data
 
-Provides free, real-time market data and options chains using yfinance.
-This replaces the static stub adapters with actual market data.
+Provides high-quality, real-time market data using Public.com API.
+Requires authentication via access token.
 """
 
 from __future__ import annotations
 
-import yfinance as yf
+import requests
 import polars as pl
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, List
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 
-class YFinanceMarketAdapter:
-    """
-    Market data adapter using Yahoo Finance.
+class PublicAPIClient:
+    """Client for Public.com API with authentication."""
     
-    Provides:
-    - Real-time quotes
-    - Historical OHLCV data
-    - Volume and liquidity metrics
-    """
+    BASE_URL = "https://api.public.com"
     
     def __init__(self):
+        self.access_token = None
+        self.token_expiry = None
+        self._authenticate()
+    
+    def _authenticate(self):
+        """Get access token from Public.com API."""
+        # Try to get credentials from environment variables
+        secret = os.environ.get('PUBLIC_API_SECRET')
+        
+        if not secret:
+            # No credentials - this will cause the adapter to fail
+            # and fallback to Yahoo Finance in main.py
+            logger.debug("PUBLIC_API_SECRET not set in environment")
+            raise ValueError("PUBLIC_API_SECRET environment variable required")
+        
+        try:
+            url = f"{self.BASE_URL}/userapiauthservice/personal/access-tokens"
+            headers = {"Content-Type": "application/json"}
+            request_body = {
+                "validityInMinutes": 60,  # 1 hour tokens
+                "secret": secret
+            }
+            
+            response = requests.post(url, headers=headers, json=request_body)
+            response.raise_for_status()
+            
+            data = response.json()
+            self.access_token = data.get('accessToken')
+            self.token_expiry = datetime.now(timezone.utc) + timedelta(minutes=60)
+            
+            logger.info("✓ Authenticated with Public.com API")
+            
+        except Exception as e:
+            logger.warning(f"Failed to authenticate with Public.com: {e}")
+            self.access_token = None
+    
+    def _ensure_authenticated(self):
+        """Ensure we have a valid access token."""
+        if not self.access_token:
+            self._authenticate()
+            return
+        
+        # Refresh token if expired or close to expiry (5 min buffer)
+        if self.token_expiry and datetime.now(timezone.utc) >= self.token_expiry - timedelta(minutes=5):
+            logger.info("Refreshing Public.com access token...")
+            self._authenticate()
+    
+    def get_quotes(self, symbols: List[str]) -> Dict[str, Dict]:
+        """
+        Get real-time quotes for multiple symbols.
+        
+        Args:
+            symbols: List of ticker symbols
+        
+        Returns:
+            Dict mapping symbol to quote data
+        """
+        self._ensure_authenticated()
+        
+        if not self.access_token:
+            logger.warning("No access token available")
+            return {}
+        
+        try:
+            url = f"{self.BASE_URL}/userapigateway/marketdata/default/quotes"
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            params = {
+                "symbols": ",".join(symbols)
+            }
+            
+            response = requests.get(url, headers=headers, params=params)
+            
+            if response.status_code == 401:
+                logger.warning("Public.com API auth failed, re-authenticating...")
+                self._authenticate()
+                # Retry once
+                response = requests.get(url, headers=headers, params=params)
+            
+            response.raise_for_status()
+            
+            data = response.json()
+            return data.get('quotes', {})
+            
+        except Exception as e:
+            logger.warning(f"Public.com API request failed: {e}")
+            return {}
+
+
+class PublicMarketAdapter:
+    """Market data adapter using Public.com API."""
+    
+    def __init__(self):
+        self.client = PublicAPIClient()
         self.cache = {}
-        self.cache_duration = 60  # Cache data for 60 seconds
+        self.cache_duration = 60  # Cache for 60 seconds
     
     def get_quote(self, symbol: str) -> Dict:
         """Get current quote for a symbol."""
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            quotes = self.client.get_quotes([symbol])
             
-            # Get latest price data from intraday
-            hist_intraday = ticker.history(period="1d", interval="1m")
-            
-            # Get daily data for accurate volume
-            hist_daily = ticker.history(period="1d", interval="1d")
-            
-            if hist_intraday.empty and hist_daily.empty:
-                # Fallback to multi-day data
-                hist_daily = ticker.history(period="5d", interval="1d")
-                if hist_daily.empty:
-                    return {}
-            
-            # Use intraday for latest price, daily for volume
-            if not hist_intraday.empty:
-                latest = hist_intraday.iloc[-1]
-                price = float(latest['Close'])
-                open_price = float(latest['Open'])
-                high = float(latest['High'])
-                low = float(latest['Low'])
-            elif not hist_daily.empty:
-                latest = hist_daily.iloc[-1]
-                price = float(latest['Close'])
-                open_price = float(latest['Open'])
-                high = float(latest['High'])
-                low = float(latest['Low'])
-            else:
+            if not quotes or symbol not in quotes:
+                logger.debug(f"No quote data returned for {symbol}")
                 return {}
             
-            # Always use daily volume (sum of all intraday volumes)
-            if not hist_daily.empty:
-                daily_volume = int(hist_daily.iloc[-1]['Volume'])
-            else:
-                # Fallback: sum intraday volumes
-                daily_volume = int(hist_intraday['Volume'].sum())
+            quote_data = quotes[symbol]
             
+            # Convert to standard format
             quote = {
                 'symbol': symbol,
-                'last': price,
-                'close': price,
-                'open': open_price,
-                'high': high,
-                'low': low,
-                'volume': daily_volume,  # Use daily volume, not last minute
+                'last': float(quote_data.get('last', 0)),
+                'close': float(quote_data.get('last', 0)),
+                'open': float(quote_data.get('open', 0)),
+                'high': float(quote_data.get('high', 0)),
+                'low': float(quote_data.get('low', 0)),
+                'volume': int(quote_data.get('volume', 0)),
+                'bid': float(quote_data.get('bid', 0)),
+                'ask': float(quote_data.get('ask', 0)),
                 'timestamp': datetime.now(timezone.utc),
             }
-            
-            # Add bid/ask if available
-            if 'bid' in info and info['bid']:
-                quote['bid'] = float(info['bid'])
-            if 'ask' in info and info['ask']:
-                quote['ask'] = float(info['ask'])
             
             return quote
             
@@ -103,19 +162,14 @@ class YFinanceMarketAdapter:
     ) -> pl.DataFrame:
         """
         Get historical OHLCV data.
-        
-        Args:
-            symbol: Ticker symbol
-            days: Number of days of history
-            interval: Data interval (1m, 5m, 15m, 1h, 1d)
-        
-        Returns:
-            Polars DataFrame with OHLCV data
+        Fallback to Yahoo Finance for historical data.
         """
         try:
+            import yfinance as yf
+            
             ticker = yf.Ticker(symbol)
             
-            # Map days to yfinance period
+            # Map days to period
             if days <= 7:
                 period = f"{days}d"
             elif days <= 60:
@@ -145,51 +199,27 @@ class YFinanceMarketAdapter:
             return pl.DataFrame()
     
     def get_intraday(self, symbol: str, minutes: int = 60) -> pl.DataFrame:
-        """Get recent intraday data for liquidity analysis."""
+        """Get recent intraday data."""
         return self.get_historical(symbol, days=1, interval="1m")
     
     def fetch_ohlcv(self, symbol: str, now: datetime, lookback_days: int = 30) -> pl.DataFrame:
-        """
-        Fetch OHLCV data (interface method for engines).
-        
-        Args:
-            symbol: Ticker symbol
-            now: Current datetime (ignored, uses current time)
-            lookback_days: Number of days of history
-        
-        Returns:
-            Polars DataFrame with OHLCV data
-        """
-        # Ensure lookback_days is an int
+        """Fetch OHLCV data (interface method for engines)."""
         if not isinstance(lookback_days, int):
             lookback_days = 30
         return self.get_historical(symbol, days=lookback_days, interval="1d")
 
 
-class YFinanceOptionsAdapter:
+class PublicOptionsAdapter:
     """
-    Options chain adapter using Yahoo Finance.
-    
-    Provides:
-    - Complete options chains
-    - Greeks (if available)
-    - Open interest and volume
+    Options adapter - Public.com doesn't provide options data.
+    Fallback to Yahoo Finance for options chains.
     """
     
     def __init__(self):
         pass
     
     def fetch_chain(self, symbol: str, now: datetime) -> pl.DataFrame:
-        """
-        Fetch options chain (interface method for HedgeEngine).
-        
-        Args:
-            symbol: Ticker symbol
-            now: Current datetime (ignored, uses current time)
-        
-        Returns:
-            Polars DataFrame with options chain
-        """
+        """Fetch options chain (fallback to Yahoo Finance)."""
         return self.get_chain(symbol, days_to_expiry=30)
     
     def get_chain(
@@ -197,45 +227,33 @@ class YFinanceOptionsAdapter:
         symbol: str,
         days_to_expiry: Optional[int] = None
     ) -> pl.DataFrame:
-        """
-        Get options chain for a symbol.
-        
-        Args:
-            symbol: Ticker symbol
-            days_to_expiry: Target days to expiration (finds closest)
-        
-        Returns:
-            Polars DataFrame with options chain data
-        """
+        """Get options chain using Yahoo Finance."""
         try:
-            ticker = yf.Ticker(symbol)
+            import yfinance as yf
             
-            # Get available expiration dates
+            ticker = yf.Ticker(symbol)
             expirations = ticker.options
             
             if not expirations:
-                logger.warning(f"No options available for {symbol}")
                 return pl.DataFrame()
             
-            # Find closest expiration to target
+            # Find closest expiration
             target_date = datetime.now() + timedelta(days=days_to_expiry or 30)
-            
             closest_exp = min(
                 expirations,
                 key=lambda x: abs((datetime.strptime(x, '%Y-%m-%d') - target_date).days)
             )
             
-            # Get options chain for that expiration
+            # Get options chain
             opt_chain = ticker.option_chain(closest_exp)
             
-            # Combine calls and puts
             calls = opt_chain.calls.copy()
             calls['option_type'] = 'call'
             
             puts = opt_chain.puts.copy()
             puts['option_type'] = 'put'
             
-            # Combine into single DataFrame (convert NaN to 0 and cast to appropriate types)
+            # Combine with type conversion for NaN values
             all_options = pl.DataFrame({
                 'strike': list(calls['strike']) + list(puts['strike']),
                 'option_type': list(calls['option_type']) + list(puts['option_type']),
@@ -248,27 +266,6 @@ class YFinanceOptionsAdapter:
                 'implied_volatility': list(calls['impliedVolatility'].fillna(0)) + list(puts['impliedVolatility'].fillna(0)),
             })
             
-            # Add Greeks if available
-            if 'delta' in calls.columns:
-                all_options = all_options.with_columns([
-                    pl.Series('delta', list(calls['delta'].fillna(0)) + list(puts['delta'].fillna(0))),
-                ])
-            
-            if 'gamma' in calls.columns:
-                all_options = all_options.with_columns([
-                    pl.Series('gamma', list(calls['gamma'].fillna(0)) + list(puts['gamma'].fillna(0))),
-                ])
-            
-            if 'theta' in calls.columns:
-                all_options = all_options.with_columns([
-                    pl.Series('theta', list(calls['theta'].fillna(0)) + list(puts['theta'].fillna(0))),
-                ])
-            
-            if 'vega' in calls.columns:
-                all_options = all_options.with_columns([
-                    pl.Series('vega', list(calls['vega'].fillna(0)) + list(puts['vega'].fillna(0))),
-                ])
-            
             return all_options
             
         except Exception as e:
@@ -278,6 +275,7 @@ class YFinanceOptionsAdapter:
     def get_current_price(self, symbol: str) -> float:
         """Get current underlying price."""
         try:
+            import yfinance as yf
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period="1d")
             
@@ -291,29 +289,17 @@ class YFinanceOptionsAdapter:
             return 0.0
 
 
-class YFinanceNewsAdapter:
+class PublicNewsAdapter:
     """
-    News adapter using Yahoo Finance.
-    
-    Provides recent news headlines for sentiment analysis.
+    News adapter - Public.com doesn't provide news.
+    Fallback to Yahoo Finance for news.
     """
     
     def __init__(self):
         pass
     
     def fetch_news(self, symbol: str, now: datetime, lookback_hours: int = 24) -> List[Dict]:
-        """
-        Fetch news (interface method for engines).
-        
-        Args:
-            symbol: Ticker symbol
-            now: Current datetime (ignored, uses current time)
-            lookback_hours: Hours of news history
-        
-        Returns:
-            List of news items
-        """
-        # Ensure lookback_hours is an int (sometimes gets datetime)
+        """Fetch news (fallback to Yahoo Finance)."""
         if not isinstance(lookback_hours, int):
             lookback_hours = 24
         return self.get_recent_news(symbol, hours=lookback_hours)
@@ -323,26 +309,20 @@ class YFinanceNewsAdapter:
         symbol: str,
         hours: int = 24
     ) -> List[Dict]:
-        """
-        Get recent news for a symbol.
-        
-        Returns list of news items with:
-        - title
-        - published_at
-        - source
-        """
+        """Get recent news using Yahoo Finance."""
         try:
+            import yfinance as yf
+            
             ticker = yf.Ticker(symbol)
             news = ticker.news
             
             if not news:
                 return []
             
-            # Convert to standard format
             cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
             
             formatted_news = []
-            for item in news[:10]:  # Limit to 10 most recent
+            for item in news[:10]:
                 try:
                     pub_time = datetime.fromtimestamp(
                         item.get('providerPublishTime', 0),
@@ -366,11 +346,10 @@ class YFinanceNewsAdapter:
             return []
 
 
-# Convenience function to create all adapters at once
-def create_yfinance_adapters():
-    """Create all three adapters using Yahoo Finance."""
+def create_public_adapters():
+    """Create all three Public.com adapters."""
     return (
-        YFinanceMarketAdapter(),
-        YFinanceOptionsAdapter(),
-        YFinanceNewsAdapter(),
+        PublicMarketAdapter(),
+        PublicOptionsAdapter(),
+        PublicNewsAdapter(),
     )

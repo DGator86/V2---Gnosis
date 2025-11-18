@@ -181,22 +181,32 @@ class OpportunityScanner:
             quote = self.market_adapter.get_quote(symbol)
             
             if not quote:
+                logger.debug(f"❌ {symbol}: No quote data returned")
                 return False
             
             price = quote.get('close', quote.get('last', 0))
             volume = quote.get('volume', 0)
             
+            logger.debug(f"📊 {symbol}: price=${price:.2f}, volume={volume:,}")
+            
             # Apply filters
-            if price < min_price or price > max_price:
+            if price < min_price:
+                logger.debug(f"   ❌ Price ${price:.2f} below minimum ${min_price:.2f}")
+                return False
+            
+            if price > max_price:
+                logger.debug(f"   ❌ Price ${price:.2f} above maximum ${max_price:.2f}")
                 return False
             
             if volume < min_volume:
+                logger.debug(f"   ❌ Volume {volume:,} below minimum {min_volume:,}")
                 return False
             
+            logger.debug(f"   ✓ {symbol} passed prefilter")
             return True
             
         except Exception as e:
-            logger.debug(f"Prefilter failed for {symbol}: {e}")
+            logger.debug(f"❌ Prefilter failed for {symbol}: {e}")
             return False
     
     def _score_symbol(self, symbol: str) -> Optional[OpportunityScore]:
@@ -251,6 +261,14 @@ class OpportunityScanner:
                 weights['sentiment'] * sentiment_component +
                 weights['options'] * options_score
             )
+            
+            logger.debug(f"   🎯 {symbol} Component Scores:")
+            logger.debug(f"      Energy: {energy_score:.3f} (asymmetry={energy_asymmetry:.2f})")
+            logger.debug(f"      Liquidity: {liquidity_score:.3f}")
+            logger.debug(f"      Volatility: {volatility_score:.3f}")
+            logger.debug(f"      Sentiment: {sentiment_component:.3f}")
+            logger.debug(f"      Options: {options_score:.3f}")
+            logger.debug(f"      COMPOSITE: {composite_score:.3f}")
             
             # Determine direction and opportunity type
             direction, confidence = self._determine_direction(
