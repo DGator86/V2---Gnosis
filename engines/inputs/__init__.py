@@ -12,6 +12,17 @@ try:
     )
 except ImportError:
     pass  # yfinance not installed
+
+try:
+    from .public_adapter import (
+        PublicMarketAdapter,
+        PublicOptionsAdapter,
+        PublicNewsAdapter,
+        create_public_adapters
+    )
+except ImportError:
+    pass  # requests not installed or Public.com adapter unavailable
+
 from .sample_options_generator import SampleOptionsGenerator, generate_sample_chain_for_testing
 
 __all__ = [

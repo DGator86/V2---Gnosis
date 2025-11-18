@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import yfinance as yf
 import polars as pl
+import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, List
 import logging
@@ -234,7 +235,7 @@ class YFinanceOptionsAdapter:
             puts = opt_chain.puts.copy()
             puts['option_type'] = 'put'
             
-            # Combine into single DataFrame
+            # Combine into single DataFrame (convert NaN to 0 and cast to appropriate types)
             all_options = pl.DataFrame({
                 'strike': list(calls['strike']) + list(puts['strike']),
                 'option_type': list(calls['option_type']) + list(puts['option_type']),
@@ -242,8 +243,8 @@ class YFinanceOptionsAdapter:
                 'bid': list(calls['bid']) + list(puts['bid']),
                 'ask': list(calls['ask']) + list(puts['ask']),
                 'last': list(calls['lastPrice']) + list(puts['lastPrice']),
-                'volume': list(calls['volume'].fillna(0)) + list(puts['volume'].fillna(0)),
-                'open_interest': list(calls['openInterest'].fillna(0)) + list(puts['openInterest'].fillna(0)),
+                'volume': [int(v) if not pd.isna(v) else 0 for v in list(calls['volume']) + list(puts['volume'])],
+                'open_interest': [int(oi) if not pd.isna(oi) else 0 for oi in list(calls['openInterest']) + list(puts['openInterest'])],
                 'implied_volatility': list(calls['impliedVolatility'].fillna(0)) + list(puts['impliedVolatility'].fillna(0)),
             })
             
@@ -312,6 +313,9 @@ class YFinanceNewsAdapter:
         Returns:
             List of news items
         """
+        # Ensure lookback_hours is an int (sometimes gets datetime)
+        if not isinstance(lookback_hours, int):
+            lookback_hours = 24
         return self.get_recent_news(symbol, hours=lookback_hours)
     
     def get_recent_news(
