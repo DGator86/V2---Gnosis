@@ -159,6 +159,20 @@ class AgentsConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class ExecutionConfig(BaseModel):
+    """Execution and broker configuration."""
+
+    broker: str = "alpaca_paper"  # Options: alpaca_paper, alpaca_live, simulated
+    mode: str = "paper"  # Options: paper, live
+    risk_per_trade_pct: float = 1.0
+    max_position_size_pct: float = 2.0
+    max_daily_loss_usd: float = 5000.0
+    loop_interval_seconds: int = 60
+    enable_trading: bool = True
+
+    model_config = ConfigDict(extra="allow")
+
+
 class AdaptersConfig(BaseModel):
     """Adapter configuration stub allowing arbitrary keys."""
 
@@ -176,6 +190,7 @@ class AppConfig(BaseModel):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     adapters: AdaptersConfig = Field(default_factory=AdaptersConfig)
 
     model_config = ConfigDict(extra="allow")
