@@ -3,7 +3,7 @@ from .market_data_adapter import MarketDataAdapter
 from .news_adapter import NewsAdapter
 from .options_chain_adapter import OptionsChainAdapter
 from .stub_adapters import StaticMarketDataAdapter, StaticNewsAdapter, StaticOptionsAdapter
-from .public_adapter import PublicAdapter
+from .public_trading_adapter import PublicTradingAdapter, create_adapter
 from .sample_options_generator import SampleOptionsGenerator, generate_sample_chain_for_testing
 
 __all__ = [
@@ -13,7 +13,8 @@ __all__ = [
     "StaticMarketDataAdapter",
     "StaticNewsAdapter",
     "StaticOptionsAdapter",
-    "PublicAdapter",
+    "PublicTradingAdapter",
+    "create_adapter",
     "SampleOptionsGenerator",
     "generate_sample_chain_for_testing",
 ]
