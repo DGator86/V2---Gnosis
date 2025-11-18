@@ -113,8 +113,13 @@ class PublicAdapter:
             # Exchange secret for access token
             response = self.client.post(
                 "/userapiauthservice/personal/access-tokens",
-                json={"secret_key": self.api_secret}
+                json={"secret": self.api_secret}
             )
+            
+            # Log response for debugging
+            if response.status_code != 200:
+                logger.error(f"Token exchange failed: {response.status_code} - {response.text}")
+            
             response.raise_for_status()
             
             # Parse response
