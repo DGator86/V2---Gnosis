@@ -75,5 +75,39 @@ execution:
   max_daily_loss_usd: 5000.0
   loop_interval_seconds: 60
   enable_trading: true
+  
+  # Options trading configuration
+  use_options: true
+  options:
+    enabled: true
+    default_dte_min: 7
+    default_dte_max: 45
+    max_legs_per_order: 4
+    max_positions: 5
+    max_total_legs: 10
+    
+    # Risk parameters
+    risk_per_trade_pct: 1.5
+    max_portfolio_options_pct: 20.0
+    max_loss_per_trade: 500.0
+    
+    # Delta targets for strike selection
+    delta_targets:
+      deep_itm: 0.80
+      itm: 0.70
+      itm_near: 0.60
+      atm: 0.50
+      otm_near: 0.30
+      otm: 0.25
+      otm_far: 0.16
+    
+    # Strategy preferences
+    prefer_defined_risk: true
+    allow_naked_options: false  # Only in paper mode
+    allow_aggressive_strategies: true
+    
+    # IV thresholds
+    high_iv_threshold: 70
+    low_iv_threshold: 30
 
 adapters: {}

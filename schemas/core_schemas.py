@@ -99,3 +99,88 @@ class LedgerRecord(BaseModel):
     trade_ideas: List[TradeIdea]
 
     realized_pnl: Optional[float] = None
+
+
+# ============================================================================
+# OPTIONS TRADING SCHEMAS
+# ============================================================================
+
+class OptionsLeg(BaseModel):
+    """Single leg of an options order - Alpaca format"""
+    
+    symbol: str  # Options symbol in Alpaca format: "AAPL  251219C00250000"
+    side: Literal["buy", "sell"]
+    quantity: int
+    option_type: Literal["call", "put"]
+    strike: float
+    expiration_date: str  # Format: "YYYY-MM-DD"
+    
+    # Greeks and pricing (optional, for analysis)
+    delta: Optional[float] = None
+    gamma: Optional[float] = None
+    theta: Optional[float] = None
+    vega: Optional[float] = None
+    implied_volatility: Optional[float] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    last: Optional[float] = None
+
+
+class OptionsOrderRequest(BaseModel):
+    """Complete options order request for multi-leg strategies"""
+    
+    order_id: str
+    symbol: str  # Underlying symbol
+    strategy_name: str  # One of the 28 strategies
+    strategy_number: int  # 1-28
+    
+    legs: List[OptionsLeg]  # 1-4 legs
+    
+    # Order parameters
+    order_type: Literal["market", "limit", "debit", "credit"] = "market"
+    time_in_force: Literal["day", "gtc", "ioc", "fok"] = "day"
+    limit_price: Optional[float] = None
+    
+    # Risk parameters
+    max_loss: float
+    max_profit: Optional[float] = None
+    breakeven_points: List[float] = Field(default_factory=list)
+    buying_power_reduction: float
+    
+    # Signal context from Hedge Engine
+    hedge_engine_snapshot: Dict[str, float] = Field(default_factory=dict)
+    composer_signal: Literal["BUY", "SELL", "HOLD"]
+    composer_confidence: float = Field(ge=0.0, le=1.0)
+    
+    # Metadata
+    created_at: datetime = Field(default_factory=datetime.now)
+    rationale: str
+    tags: List[str] = Field(default_factory=list)
+
+
+class OptionsPosition(BaseModel):
+    """Track an open options position"""
+    
+    position_id: str
+    symbol: str  # Underlying
+    strategy_name: str
+    legs: List[OptionsLeg]
+    
+    # Entry details
+    entry_date: datetime
+    entry_cost: float
+    quantity: int  # Number of contracts
+    
+    # Current status
+    current_value: float
+    unrealized_pnl: float
+    days_in_trade: int
+    
+    # Exit conditions
+    target_profit: Optional[float] = None
+    stop_loss: Optional[float] = None
+    max_days_held: int = 45
+    
+    # Hedging status
+    is_hedged: bool = False
+    hedge_delta: float = 0.0
