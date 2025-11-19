@@ -23,7 +23,7 @@ test = [
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.21",
     # "yfinance>=0.2.40",  # REMOVED: No longer using yfinance
-    "greekcalc>=0.3.0",
+    # "greekcalc>=0.3.0",  # REMOVED: Package not available on PyPI - code handles absence gracefully
     "pyarrow>=14.0.0",
 ]
 
