@@ -9,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
+import pytest
 
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -171,6 +172,7 @@ def test_watchlist():
         return False
 
 
+@pytest.mark.asyncio
 async def test_scanner():
     """Test the multi-timeframe scanner"""
     print("\n" + "="*60)
