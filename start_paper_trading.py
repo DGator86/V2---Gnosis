@@ -58,7 +58,7 @@ Press Ctrl+C to stop gracefully.
         symbol="SPY",
         bar_interval="1Min",
         enable_memory=True,      # Use episodic memory
-        enable_trading=False,    # Set True to actually place orders
+        enable_trading=True,     # TRADING ENABLED - Will place paper orders
         paper_mode=True          # Paper trading account
     )
     

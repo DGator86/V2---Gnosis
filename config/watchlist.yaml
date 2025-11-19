@@ -1,0 +1,215 @@
+# Super Gnosis Trading Watchlist Configuration
+# 25+ High-Liquidity Stocks and Indices for Active Scanning
+
+watchlist:
+  # Major Indices & ETFs (7)
+  indices:
+    - symbol: "SPY"
+      name: "S&P 500 ETF"
+      category: "index"
+      priority: "high"
+    - symbol: "QQQ"
+      name: "NASDAQ 100 ETF"
+      category: "index"
+      priority: "high"
+    - symbol: "IWM"
+      name: "Russell 2000 ETF"
+      category: "index"
+      priority: "high"
+    - symbol: "DIA"
+      name: "Dow Jones ETF"
+      category: "index"
+      priority: "medium"
+    - symbol: "VIX"
+      name: "Volatility Index"
+      category: "volatility"
+      priority: "high"
+    - symbol: "TLT"
+      name: "20+ Year Treasury Bond ETF"
+      category: "bonds"
+      priority: "medium"
+    - symbol: "GLD"
+      name: "Gold ETF"
+      category: "commodities"
+      priority: "medium"
+
+  # Mega Cap Tech (8)
+  mega_tech:
+    - symbol: "AAPL"
+      name: "Apple"
+      category: "tech"
+      priority: "high"
+    - symbol: "MSFT"
+      name: "Microsoft"
+      category: "tech"
+      priority: "high"
+    - symbol: "NVDA"
+      name: "NVIDIA"
+      category: "tech"
+      priority: "high"
+    - symbol: "GOOGL"
+      name: "Alphabet"
+      category: "tech"
+      priority: "high"
+    - symbol: "AMZN"
+      name: "Amazon"
+      category: "tech"
+      priority: "high"
+    - symbol: "META"
+      name: "Meta Platforms"
+      category: "tech"
+      priority: "high"
+    - symbol: "TSLA"
+      name: "Tesla"
+      category: "tech"
+      priority: "high"
+    - symbol: "AMD"
+      name: "Advanced Micro Devices"
+      category: "tech"
+      priority: "medium"
+
+  # Financial Sector (4)
+  financials:
+    - symbol: "JPM"
+      name: "JPMorgan Chase"
+      category: "finance"
+      priority: "medium"
+    - symbol: "BAC"
+      name: "Bank of America"
+      category: "finance"
+      priority: "medium"
+    - symbol: "GS"
+      name: "Goldman Sachs"
+      category: "finance"
+      priority: "medium"
+    - symbol: "XLF"
+      name: "Financial Sector ETF"
+      category: "finance"
+      priority: "medium"
+
+  # High Volume Traders (6)
+  high_volume:
+    - symbol: "PLTR"
+      name: "Palantir"
+      category: "tech"
+      priority: "medium"
+    - symbol: "NIO"
+      name: "NIO Inc"
+      category: "ev"
+      priority: "low"
+    - symbol: "SOFI"
+      name: "SoFi Technologies"
+      category: "fintech"
+      priority: "low"
+    - symbol: "F"
+      name: "Ford Motor"
+      category: "auto"
+      priority: "low"
+    - symbol: "COIN"
+      name: "Coinbase"
+      category: "crypto"
+      priority: "medium"
+    - symbol: "MARA"
+      name: "Marathon Digital"
+      category: "crypto"
+      priority: "low"
+
+  # Additional Strategic Picks (5)
+  strategic:
+    - symbol: "NFLX"
+      name: "Netflix"
+      category: "media"
+      priority: "medium"
+    - symbol: "DIS"
+      name: "Disney"
+      category: "media"
+      priority: "medium"
+    - symbol: "BA"
+      name: "Boeing"
+      category: "aerospace"
+      priority: "low"
+    - symbol: "V"
+      name: "Visa"
+      category: "payments"
+      priority: "medium"
+    - symbol: "UNH"
+      name: "UnitedHealth"
+      category: "healthcare"
+      priority: "medium"
+
+# Timeframe Configuration
+timeframes:
+  - interval: "1Min"
+    bars: 100
+    priority: "high"
+    use_for: ["scalping", "momentum"]
+  
+  - interval: "5Min"
+    bars: 100
+    priority: "high"
+    use_for: ["day_trading", "breakouts"]
+  
+  - interval: "15Min"
+    bars: 100
+    priority: "high"
+    use_for: ["intraday_swings", "pattern_recognition"]
+  
+  - interval: "30Min"
+    bars: 100
+    priority: "medium"
+    use_for: ["trend_confirmation", "support_resistance"]
+  
+  - interval: "1Hour"
+    bars: 100
+    priority: "medium"
+    use_for: ["swing_trading", "major_levels"]
+  
+  - interval: "4Hour"
+    bars: 100
+    priority: "low"
+    use_for: ["position_trading", "major_trends"]
+  
+  - interval: "1Day"
+    bars: 100
+    priority: "low"
+    use_for: ["portfolio_positioning", "long_term_trends"]
+
+# Scanning Configuration
+scanning:
+  max_concurrent: 10  # Max symbols to scan concurrently
+  update_frequency_seconds: 60  # How often to rescan
+  prioritize_by: ["volume", "volatility", "options_flow"]
+  
+  # Alerts and Triggers
+  alerts:
+    unusual_options_activity:
+      enabled: true
+      min_premium: 1000000  # $1M minimum
+      min_volume_ratio: 3.0  # 3x average volume
+    
+    breakout_detection:
+      enabled: true
+      timeframes: ["5Min", "15Min"]
+      min_volume_spike: 2.0  # 2x average volume
+    
+    regime_change:
+      enabled: true
+      confidence_threshold: 0.7
+    
+    dark_pool_activity:
+      enabled: true
+      min_size: 500000  # $500k minimum
+
+# Data Source Priority
+data_sources:
+  primary: "unusual_whales"
+  secondary: "alpaca"
+  tertiary: "yfinance"
+  
+  # Specific data mappings
+  options_flow: "unusual_whales"
+  options_chains: "unusual_whales"
+  market_data: "alpaca"
+  dark_pool: "unusual_whales"
+  congressional_trades: "unusual_whales"
+  sentiment: "unusual_whales"
