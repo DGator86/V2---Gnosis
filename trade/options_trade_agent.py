@@ -60,7 +60,8 @@ class OptionsTradeAgent:
         max_portfolio_options_pct: float = 20.0,
         default_dte_min: int = 7,
         default_dte_max: int = 45,
-        paper_trading: bool = True
+        paper_trading: bool = True,
+        learning_orchestrator=None
     ):
         """
         Initialize Options Trade Agent.
@@ -72,6 +73,7 @@ class OptionsTradeAgent:
             default_dte_min: Minimum days to expiration
             default_dte_max: Maximum days to expiration
             paper_trading: Enable paper trading mode
+            learning_orchestrator: Optional LearningOrchestrator for adaptive strategy selection
         """
         self.portfolio_value = portfolio_value
         self.risk_per_trade_pct = risk_per_trade_pct
@@ -79,11 +81,14 @@ class OptionsTradeAgent:
         self.default_dte_min = default_dte_min
         self.default_dte_max = default_dte_max
         self.paper_trading = paper_trading
+        self.learning_orchestrator = learning_orchestrator
         
         print(f"✅ Options Trade Agent initialized")
         print(f"   Portfolio: ${portfolio_value:,.2f}")
         print(f"   Risk per trade: {risk_per_trade_pct}%")
         print(f"   Mode: {'PAPER' if paper_trading else 'LIVE'}")
+        if learning_orchestrator:
+            print(f"   🧠 Adaptive Learning: ENABLED")
     
     def select_strategy(
         self,
@@ -311,6 +316,20 @@ class OptionsTradeAgent:
             # No strategy matched - insufficient signal strength or ambiguous conditions
             print(f"⚠️  No options strategy selected for {symbol} - insufficient signal clarity")
             return None
+        
+        # 🧠 ADAPTIVE LEARNING OVERRIDE: Bandit Strategy Selection
+        # If learning orchestrator is enabled, use bandit to override deterministic choice
+        # with 20% exploration rate
+        original_strategy = strategy_number
+        if self.learning_orchestrator and self.learning_orchestrator.enabled:
+            bandit_strategy = self.learning_orchestrator.get_bandit_strategy(
+                symbol=symbol,
+                deterministic_choice=strategy_number
+            )
+            if bandit_strategy != strategy_number:
+                print(f"🧠 Bandit Override: Strategy #{strategy_number} → #{bandit_strategy} (exploration)")
+                strategy_number = bandit_strategy
+                rationale = f"[BANDIT EXPLORATION] {rationale} (original: #{original_strategy})"
         
         # Build the complete options order based on selected strategy
         print(f"✅ Selected Strategy #{strategy_number} for {symbol}: {rationale}")

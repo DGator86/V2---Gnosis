@@ -40,6 +40,12 @@ class Position:
     # Memory tracking
     episode_id: Optional[str] = None
     
+    # Adaptive learning metadata
+    strategy_id: Optional[int] = None  # Options strategy number (1-28)
+    hedge_snapshot: Optional[Dict] = None  # Hedge Engine snapshot at entry
+    raw_confidence: Optional[float] = None  # Pre-calibration confidence
+    iv_rank: Optional[float] = None  # IV rank at entry
+    
     def update(self, current_price: float):
         """Update position with latest price"""
         self.current_price = current_price
@@ -87,7 +93,11 @@ class Position:
             "current_price": self.current_price,
             "bars_held": self.bars_held,
             "unrealized_pnl": self.unrealized_pnl,
-            "episode_id": self.episode_id
+            "episode_id": self.episode_id,
+            "strategy_id": self.strategy_id,
+            "hedge_snapshot": self.hedge_snapshot,
+            "raw_confidence": self.raw_confidence,
+            "iv_rank": self.iv_rank
         }
     
     @classmethod
@@ -107,7 +117,11 @@ class Position:
             current_price=d.get("current_price", 0.0),
             bars_held=d.get("bars_held", 0),
             unrealized_pnl=d.get("unrealized_pnl", 0.0),
-            episode_id=d.get("episode_id")
+            episode_id=d.get("episode_id"),
+            strategy_id=d.get("strategy_id"),
+            hedge_snapshot=d.get("hedge_snapshot"),
+            raw_confidence=d.get("raw_confidence"),
+            iv_rank=d.get("iv_rank")
         )
 
 
@@ -120,17 +134,20 @@ class PositionManager:
     - Risk checks (max positions, daily loss)
     - State persistence (JSON file)
     - P&L aggregation
+    - Adaptive learning feedback integration
     """
     
     def __init__(
         self,
         state_file: str = "trading_state.json",
         max_positions: int = 3,
-        max_daily_loss: float = -0.05  # -5% daily loss limit
+        max_daily_loss: float = -0.05,  # -5% daily loss limit
+        learning_orchestrator=None
     ):
         self.state_file = Path(state_file)
         self.max_positions = max_positions
         self.max_daily_loss = max_daily_loss
+        self.learning_orchestrator = learning_orchestrator
         
         self.positions: Dict[str, Position] = {}
         self.daily_pnl: float = 0.0
@@ -169,10 +186,28 @@ class PositionManager:
         confidence: float,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-        episode_id: Optional[str] = None
+        episode_id: Optional[str] = None,
+        strategy_id: Optional[int] = None,
+        hedge_snapshot: Optional[Dict] = None,
+        raw_confidence: Optional[float] = None,
+        iv_rank: Optional[float] = None
     ) -> Optional[Position]:
         """
         Open new position
+        
+        Args:
+            symbol: Trading symbol
+            side: 1 = long, -1 = short
+            size: Position size (fraction of capital)
+            entry_price: Entry price
+            confidence: Calibrated confidence score
+            stop_loss: Stop loss price
+            take_profit: Take profit price
+            episode_id: Memory episode ID
+            strategy_id: Options strategy number (1-28) for adaptive learning
+            hedge_snapshot: Hedge Engine snapshot at entry
+            raw_confidence: Pre-calibration confidence
+            iv_rank: IV rank at entry
         
         Returns:
             Position object or None if rejected
@@ -194,7 +229,11 @@ class PositionManager:
             entry_confidence=confidence,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            episode_id=episode_id
+            episode_id=episode_id,
+            strategy_id=strategy_id,
+            hedge_snapshot=hedge_snapshot,
+            raw_confidence=raw_confidence,
+            iv_rank=iv_rank
         )
         
         self.positions[symbol] = position
@@ -206,11 +245,22 @@ class PositionManager:
         
         return position
     
-    def update_positions(self, prices: Dict[str, float]):
-        """Update all positions with current prices"""
+    def update_positions(self, prices: Dict[str, float], hedge_snapshots: Optional[Dict[str, Dict]] = None):
+        """
+        Update all positions with current prices and hedge snapshots
+        
+        Args:
+            prices: Dict of symbol -> current_price
+            hedge_snapshots: Optional dict of symbol -> hedge_snapshot for lookahead training
+        """
         for symbol, position in self.positions.items():
             if symbol in prices:
                 position.update(prices[symbol])
+        
+        # 🧠 ADAPTIVE LEARNING: Feed hedge snapshots to Transformer for sequence learning
+        if self.learning_orchestrator and self.learning_orchestrator.enabled and hedge_snapshots:
+            for symbol, snapshot in hedge_snapshots.items():
+                self.learning_orchestrator.add_hedge_snapshot_sequence(symbol, snapshot)
     
     def check_exits(self) -> List[tuple[str, str]]:
         """
@@ -272,6 +322,27 @@ class PositionManager:
             "realized_pnl": realized_pnl,
             "episode_id": position.episode_id
         }
+        
+        # 🧠 ADAPTIVE LEARNING FEEDBACK: Update all learning components
+        if self.learning_orchestrator and self.learning_orchestrator.enabled:
+            # Calculate realized P&L in USD (assuming position.size is capital allocation)
+            capital_risked = position.size  # This should be actual USD amount risked
+            realized_pnl_usd = capital_risked * pnl_pct
+            
+            # Provide feedback to all learning components
+            if position.strategy_id and position.hedge_snapshot:
+                self.learning_orchestrator.after_trade_closed(
+                    symbol=symbol,
+                    strategy_id=position.strategy_id,
+                    entry_price=position.entry_price,
+                    exit_price=exit_price,
+                    hedge_snapshot=position.hedge_snapshot,
+                    raw_confidence=position.raw_confidence or position.entry_confidence,
+                    realized_pnl_usd=realized_pnl_usd,
+                    capital_risked=capital_risked,
+                    iv_rank=position.iv_rank
+                )
+                print(f"🧠 Adaptive learning updated for strategy #{position.strategy_id}")
         
         # Remove position
         del self.positions[symbol]
