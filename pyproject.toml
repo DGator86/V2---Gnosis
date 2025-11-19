@@ -19,12 +19,9 @@ dev = [
     "mypy>=1.5",
 ]
 test = [
-    "pytest>=7.4",
-    "pytest-cov>=4.0",
-    "pytest-asyncio>=0.21",
-    # "yfinance>=0.2.40",  # REMOVED: No longer using yfinance
-    "greekcalc>=0.3.0",
-    "pyarrow>=14.0.0",
+    "pytest >= 7.4",
+    "pytest-cov",
+    "pytest-asyncio",
 ]
 
 [tool.setuptools.packages.find]
