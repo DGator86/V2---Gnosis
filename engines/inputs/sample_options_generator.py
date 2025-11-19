@@ -247,9 +247,6 @@ def generate_sample_chain_for_testing(
             "spot parameter is required. yfinance has been removed. "
             "Use Unusual Whales or Public.com to fetch current price first."
         )
-        except Exception as e:
-            logger.warning(f"Could not fetch spot price, using default: {e}")
-            spot = 450.0
     
     # Generate chain
     generator = SampleOptionsGenerator(spot=spot)
