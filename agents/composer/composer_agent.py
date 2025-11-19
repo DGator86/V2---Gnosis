@@ -35,6 +35,7 @@ class ComposerAgent:
         liquidity_agent: Any,
         sentiment_agent: Any,
         reference_price_getter,
+        learning_orchestrator: Any = None,
     ) -> None:
         """
         Parameters
@@ -47,11 +48,14 @@ class ComposerAgent:
             Object exposing .output() -> EngineDirective or dict.
         reference_price_getter : Callable[[], float]
             Function returning the current reference price for expected move cones.
+        learning_orchestrator : Any, optional
+            LearningOrchestrator instance for adaptive learning (Transformer lookahead).
         """
         self._hedge_agent = hedge_agent
         self._liquidity_agent = liquidity_agent
         self._sentiment_agent = sentiment_agent
         self._reference_price_getter = reference_price_getter
+        self._learning_orchestrator = learning_orchestrator
 
     @staticmethod
     def _normalize_output(raw: Any, name: str) -> EngineDirective:
@@ -82,9 +86,27 @@ class ComposerAgent:
         liquidity = self._normalize_output(raw_liq, "liquidity")
         sentiment = self._normalize_output(raw_sent, "sentiment")
 
+        # 🧠 ADAPTIVE LEARNING: Get Transformer lookahead prediction
+        lookahead_directive = None
+        if self._learning_orchestrator and self._learning_orchestrator.enabled:
+            lookahead_prediction = self._learning_orchestrator.get_lookahead_prediction()
+            if lookahead_prediction is not None:
+                # Convert prediction to EngineDirective format
+                # Prediction is % price change, convert to direction/confidence
+                pred_direction = 1.0 if lookahead_prediction > 0 else -1.0 if lookahead_prediction < 0 else 0.0
+                pred_confidence = min(1.0, abs(lookahead_prediction) / 2.0)  # Scale: 2% = 100% confidence
+                
+                lookahead_directive = EngineDirective(
+                    name="lookahead",
+                    direction=pred_direction,
+                    confidence=pred_confidence,
+                    energy=0.1  # Low energy since it's a prediction
+                )
+                print(f"🧠 Transformer Lookahead: direction={pred_direction:.2f}, confidence={pred_confidence:.2f} (raw prediction={lookahead_prediction:.4f}%)")
+
         weights = compute_regime_weights(hedge, liquidity, sentiment)
-        confidence = fuse_confidence(hedge, liquidity, sentiment, weights)
-        direction: Direction = fuse_direction(hedge, liquidity, sentiment, weights)
+        confidence = fuse_confidence(hedge, liquidity, sentiment, weights, lookahead_directive)
+        direction: Direction = fuse_direction(hedge, liquidity, sentiment, weights, lookahead_directive)
         energy = compute_total_energy(hedge, liquidity, sentiment)
 
         # Simple volatility metric for now: use volatility proxy fusion in cone_builder
