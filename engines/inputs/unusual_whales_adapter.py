@@ -309,7 +309,13 @@ class UnusualWhalesAdapter:
             params=params
         )
         
-        count = len(data.get("data", []))
+        # Handle both dict and list responses
+        if isinstance(data, dict):
+            count = len(data.get("data", []))
+        elif isinstance(data, list):
+            count = len(data)
+        else:
+            count = 0
         logger.info(f"Retrieved {count} flow record(s) for {ticker}")
         
         return data
