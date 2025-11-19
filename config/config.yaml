@@ -110,4 +110,41 @@ execution:
     high_iv_threshold: 70
     low_iv_threshold: 30
 
+# Adaptive Learning System - Closed-loop self-improvement
+adaptation:
+  enabled: true                     # false = pure deterministic mode (current behaviour)
+  lookahead_model: true            # Transformer predicting price movements
+  bandit_strategies: true          # Thompson Sampling for strategy selection
+  adaptive_thresholds: true        # Kalman filter for threshold tuning
+  confidence_calibration: true     # Online logistic regression for confidence
+  save_state_every_minutes: 15    # Persist learning state interval
+  
+  # Bandit parameters
+  bandit:
+    exploration_rate: 0.20         # 20% chance to use bandit over deterministic
+    alpha_prior: 1.0               # Beta distribution prior
+    beta_prior: 1.0
+    per_symbol: true               # Track per-symbol performance
+    
+  # Threshold adaptation parameters
+  thresholds:
+    lookback_trades: 100           # Use last 100 closed trades
+    kalman_process_noise: 0.01
+    kalman_measurement_noise: 0.1
+    ema_alpha: 0.3                 # EMA smoothing if Kalman fails
+    
+  # Confidence calibration parameters
+  calibration:
+    min_samples: 50                # Min trades before calibration kicks in
+    retrain_every_trades: 10       # Retrain every N trades
+    
+  # Lookahead model parameters
+  lookahead:
+    sequence_length: 20            # Last 20 hedge snapshots
+    hidden_dim: 64                 # Transformer hidden dimension
+    num_layers: 4                  # Transformer layers
+    num_heads: 4                   # Attention heads
+    train_every_minutes: 10        # Background training interval
+    prediction_weight: 0.3         # Weight in Composer vote
+
 adapters: {}
